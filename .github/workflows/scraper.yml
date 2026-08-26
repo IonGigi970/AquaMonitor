@@ -1,0 +1,33 @@
+name: Scraper avarii RAJA
+
+on:
+  schedule:
+    # Ruleaza la fiecare ora, in minutul 0 (GitHub Actions poate intarzia cateva minute in perioade de trafic mare)
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout cod
+        uses: actions/checkout@v4
+
+      - name: Configureaza Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instaleaza dependente
+        run: pip install -r requirements.txt
+
+      - name: Ruleaza scraper-ul
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ZILE_SCANARE: "2"
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: python scraper.py
