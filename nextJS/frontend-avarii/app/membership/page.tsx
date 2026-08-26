@@ -1,0 +1,58 @@
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import MembershipForm from "./membershipForm";
+import ListaAbonamente from "./listaAbonamente";
+
+export default async function MembershipPage() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getUser();
+
+  if (error || !data?.user) {
+    redirect("/login");
+  }
+
+  const { data: abonamente } = await supabase
+    .from("abonamente")
+    .select("*")
+    .eq("user_id", data.user.id)
+    .order("created_at", { ascending: false });
+
+  return (
+    <div className="bg-slate-50 min-h-screen flex flex-col">
+      <nav className="bg-blue-700 text-white p-4 shadow-lg">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <Link href="/" className="text-2xl font-bold tracking-tight">
+            AquaMonitor CT
+          </Link>
+          <Link href="/" className="hover:text-blue-200 transition-colors font-semibold">
+            ← Înapoi la hartă
+          </Link>
+        </div>
+      </nav>
+
+      <div className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-6">
+        <h1 className="text-2xl font-bold text-slate-800 mb-1">Alertele mele</h1>
+        <p className="text-sm text-slate-500 mb-6">
+          Conectat ca <span className="font-semibold">{data.user.email}</span>
+        </p>
+
+        <MembershipForm userId={data.user.id} userEmail={data.user.email ?? ""} />
+
+        <div className="mt-8">
+          <h2 className="text-lg font-bold text-slate-800 mb-4">
+            Abonamente active ({abonamente?.length ?? 0})
+          </h2>
+
+          {!abonamente || abonamente.length === 0 ? (
+            <p className="text-slate-500 bg-white p-5 rounded-2xl border border-slate-200">
+              Nu ai niciun abonament activ momentan. Adaugă unul mai sus.
+            </p>
+          ) : (
+            <ListaAbonamente abonamente={abonamente} userId={data.user.id} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

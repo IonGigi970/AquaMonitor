@@ -1,0 +1,150 @@
+"use client";
+
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import type { User } from '@supabase/supabase-js';
+import dynamic from 'next/dynamic';
+
+const MapComponent = dynamic(() => import('../components/mapComponent'), { 
+  ssr: false,
+  loading: () => <div className="w-full min-h-[500px] flex items-center justify-center bg-slate-100 rounded-3xl text-slate-500">Se încarcă harta...</div>
+});
+
+const supabase = createClient();
+
+interface Avarie {
+  id?: string;
+  localitate: string;
+  strada: string;
+  status: string;
+  descriere_text: string;
+  data_inceput?: string;
+  data_sfarsit?: string;
+  latitudine?: number;
+  longitudine?: number;
+}
+
+export default function Home() {
+  const router = useRouter();
+  const [avarii, setAvarii] = useState<Avarie[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    async function fetchAvarii() {
+      const { data, error } = await supabase
+        .from('avarii')
+        .select('*')
+        .order('data_adaugarii', { ascending: false });
+
+      if (!error && data) {
+        setAvarii(data);
+      }
+      setLoading(false);
+    }
+    fetchAvarii();
+  }, []);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
+    router.refresh();
+  };
+
+  return (
+    <div className="bg-slate-50 min-h-screen flex flex-col relative">
+      <nav className="bg-blue-700 text-white p-4 shadow-lg sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="text-2xl font-bold flex items-center gap-2 tracking-tight">
+                AquaMonitor CT
+            </div>
+            <div className="flex items-center gap-6 font-semibold">
+                <a href="#" className="hover:text-blue-200 transition-colors border-b-2 border-white pb-1">Dashboard</a>
+                <Link
+                  href="/membership"
+                  className="hover:text-blue-200 transition-colors text-blue-100"
+                >
+                  🔔 Alertele mele
+                </Link>
+                <button className="bg-amber-400 text-amber-950 px-5 py-2.5 rounded-xl shadow hover:bg-amber-300 transition-all transform hover:scale-105 flex items-center gap-2">
+                    ☕ Susține Proiectul
+                </button>
+                {user ? (
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-blue-100 hidden md:inline">{user.email}</span>
+                    <button
+                      onClick={handleLogout}
+                      className="bg-white/10 hover:bg-white/20 transition-colors px-4 py-2 rounded-xl"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                ) : (
+                  <Link
+                    href="/login"
+                    className="bg-white text-blue-700 px-4 py-2 rounded-xl shadow hover:bg-blue-50 transition-colors"
+                  >
+                    Login
+                  </Link>
+                )}
+            </div>
+        </div>
+      </nav>
+
+      <div className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="col-span-1 flex flex-col gap-6">
+            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                Situația la zi
+            </h2>
+            <div className="space-y-4 overflow-y-auto pr-2 max-h-[600px]">
+              {loading ? (
+                <p className="text-slate-500">Se încarcă datele...</p>
+              ) : avarii.length === 0 ? (
+                <p className="text-slate-500">Nu există avarii active.</p>
+              ) : (
+                avarii.map((item, index) => (
+                  <div key={item.id || index} className={`bg-white p-5 rounded-2xl shadow-sm border-l-4 hover:shadow-md transition-shadow relative overflow-hidden ${item.status === 'AVARIE' ? 'border-red-500' : 'border-amber-400'}`}>
+                      <div className={`absolute top-0 right-0 text-xs font-bold px-3 py-1 rounded-bl-lg ${item.status === 'AVARIE' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>
+                        {item.status}
+                      </div>
+                      <h3 className="font-bold text-lg text-slate-800 mt-2">{item.localitate}</h3>
+                      <p className="text-sm font-semibold text-slate-700 mt-1">{item.strada}</p>
+                      
+                      {(item.data_inceput || item.data_sfarsit) && (
+                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-3 bg-slate-50 p-2 rounded-lg">
+                            ⏱️ {item.data_inceput || "?"} - {item.data_sfarsit || "?"}
+                        </div>
+                      )}
+                      <p className="text-xs text-slate-600 mt-3 leading-relaxed">{item.descriere_text}</p>
+                  </div>
+                ))
+              )}
+            </div>
+        </div>
+
+        <div className="col-span-1 lg:col-span-2 flex flex-col bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-4 md:p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h2 className="text-lg font-bold text-slate-800">Harta Avariilor</h2>
+            </div>
+            <div className="w-full flex-1 min-h-[500px]">
+              <MapComponent avarii={avarii} />
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+}
