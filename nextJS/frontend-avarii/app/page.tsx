@@ -85,9 +85,12 @@ export default function Home() {
                 >
                   🔔 Alertele mele
                 </Link>
-                <button className="bg-amber-400 text-amber-950 px-5 py-2.5 rounded-xl shadow hover:bg-amber-300 transition-all transform hover:scale-105 flex items-center gap-2">
+                <Link
+                  href="/sustine"
+                  className="bg-amber-400 text-amber-950 px-5 py-2.5 rounded-xl shadow hover:bg-amber-300 transition-all transform hover:scale-105 flex items-center gap-2"
+                >
                     ☕ Susține Proiectul
-                </button>
+                </Link>
                 {user ? (
                   <div className="flex items-center gap-3">
                     <span className="text-sm text-blue-100 hidden md:inline">{user.email}</span>
