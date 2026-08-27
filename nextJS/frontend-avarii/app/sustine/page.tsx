@@ -36,28 +36,12 @@ export default function SustinePage() {
               O donație mică, o singură dată, ca să ne susții munca.
             </p>
             <a
-              href="https://revolut.me/IONGIGI970"
+              href="https://revolut.me/iongigi97"
               target="_blank"
               rel="noopener noreferrer"
               className="mt-4 bg-blue-600 text-white font-bold py-3 rounded-xl text-center hover:bg-blue-700 transition-colors"
             >
               Donează prin Revolut
-            </a>
-          </div>
-
-          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col">
-            <div className="text-3xl mb-3">💳</div>
-            <h2 className="text-lg font-bold text-slate-800">Donație recurentă</h2>
-            <p className="text-sm text-slate-500 mt-1 flex-1">
-              Susține proiectul lunar, ca să rămână gratuit pentru toți.
-            </p>
-            <a
-              href="https://www.paypal.com/donate/?hosted_button_id=EXEMPLU"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 bg-slate-800 text-white font-bold py-3 rounded-xl text-center hover:bg-slate-900 transition-colors"
-            >
-              Donează prin PayPal
             </a>
           </div>
         </div>
