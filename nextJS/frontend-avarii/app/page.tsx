@@ -35,15 +35,17 @@ export default function Home() {
 
   useEffect(() => {
     async function fetchAvarii() {
-      const { data, error } = await supabase
-        .from('avarii')
-        .select('*')
-        .order('data_adaugarii', { ascending: false });
-
-      if (error) {
-        setEroareFetch(error.message || "Eroare la încărcarea avariilor.");
-      } else if (data) {
-        setAvarii(data);
+      try {
+        const res = await fetch('/api/avarii');
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          setEroareFetch(body.error || `Eroare HTTP ${res.status}`);
+        } else {
+          const data = await res.json();
+          setAvarii(data);
+        }
+      } catch (err) {
+        setEroareFetch(err instanceof Error ? err.message : "Eroare la încărcarea avariilor.");
       }
       setLoading(false);
     }
