@@ -36,7 +36,6 @@ export default function LoginPage() {
     }
 
     router.push("/membership");
-    router.refresh();
   };
 
   return (
