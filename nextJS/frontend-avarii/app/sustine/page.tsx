@@ -28,8 +28,8 @@ export default function SustinePage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col">
+        <div className="flex justify-center">
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col w-full max-w-md">
             <div className="text-3xl mb-3">☕</div>
             <h2 className="text-lg font-bold text-slate-800">O cafea</h2>
             <p className="text-sm text-slate-500 mt-1 flex-1">
