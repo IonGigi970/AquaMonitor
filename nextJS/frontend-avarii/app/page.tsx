@@ -30,6 +30,7 @@ export default function Home() {
   const router = useRouter();
   const [avarii, setAvarii] = useState<Avarie[]>([]);
   const [loading, setLoading] = useState(true);
+  const [eroareFetch, setEroareFetch] = useState("");
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
@@ -39,7 +40,9 @@ export default function Home() {
         .select('*')
         .order('data_adaugarii', { ascending: false });
 
-      if (!error && data) {
+      if (error) {
+        setEroareFetch(error.message || "Eroare la încărcarea avariilor.");
+      } else if (data) {
         setAvarii(data);
       }
       setLoading(false);
@@ -94,12 +97,20 @@ export default function Home() {
                     </button>
                   </div>
                 ) : (
-                  <Link
-                    href="/login"
-                    className="bg-white text-blue-700 px-4 py-2 rounded-xl shadow hover:bg-blue-50 transition-colors"
-                  >
-                    Login
-                  </Link>
+                  <div className="flex items-center gap-3">
+                    <Link
+                      href="/login"
+                      className="text-blue-100 hover:text-white transition-colors px-3 py-2"
+                    >
+                      Login
+                    </Link>
+                    <Link
+                      href="/register"
+                      className="bg-white text-blue-700 px-4 py-2 rounded-xl shadow hover:bg-blue-50 transition-colors"
+                    >
+                      Sign up
+                    </Link>
+                  </div>
                 )}
             </div>
         </div>
@@ -113,6 +124,8 @@ export default function Home() {
             <div className="space-y-4 overflow-y-auto pr-2 max-h-[600px]">
               {loading ? (
                 <p className="text-slate-500">Se încarcă datele...</p>
+              ) : eroareFetch ? (
+                <p className="text-red-600 text-sm bg-red-50 p-3 rounded-xl">Eroare la încărcare: {eroareFetch}</p>
               ) : avarii.length === 0 ? (
                 <p className="text-slate-500">Nu există avarii active.</p>
               ) : (
