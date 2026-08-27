@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { formateazaText } from "@/lib/format";
 
 interface Abonament {
   id: string;
@@ -63,8 +64,8 @@ export default function ListaAbonamente({
             </span>
             <p className="text-sm font-semibold text-slate-800">{abonament.valoare_contact}</p>
             <p className="text-sm text-slate-500">
-              {abonament.localitate_interes}
-              {abonament.strada_interes ? ` — ${abonament.strada_interes}` : ""}
+              {formateazaText(abonament.localitate_interes)}
+              {abonament.strada_interes ? ` — ${formateazaText(abonament.strada_interes)}` : ""}
             </p>
           </div>
           <button
