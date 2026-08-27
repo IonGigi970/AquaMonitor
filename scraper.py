@@ -198,28 +198,59 @@ def notifica_abonatii(avarie_salvata):
         }).execute()
 
 
+def desparte_strazile(avarie):
+    """Dacă strada conține mai multe străzi (separate prin virgulă), le despărțim în avarii separate."""
+    strada = (avarie.get("strada") or "").strip()
+    if not strada or "toată" in strada.lower():
+        return [avarie]
+
+    parti = [p.strip() for p in strada.split(",") if p.strip()]
+    if len(parti) <= 1:
+        return [avarie]
+
+    rezultat = []
+    for p in parti:
+        copie = dict(avarie)
+        copie["strada"] = p
+        rezultat.append(copie)
+    return rezultat
+
+
 def salveaza_avarii(avarii_extrase, sursa_url):
     for avarie in avarii_extrase:
         if not (avarie.get("localitate") and avarie.get("strada")):
             continue
 
-        print(f"\n📍 Caut coordonate pentru: {avarie['localitate']}, {avarie['strada']}...")
-        lat, lon = obtine_coordonate(avarie['localitate'], avarie['strada'])
-        avarie['latitudine'] = lat
-        avarie['longitudine'] = lon
-        avarie['sursa_url'] = sursa_url
+        for avarie_simpla in desparte_strazile(avarie):
+            print(f"\n📍 Caut coordonate pentru: {avarie_simpla['localitate']}, {avarie_simpla['strada']}...")
+            lat, lon = obtine_coordonate(avarie_simpla['localitate'], avarie_simpla['strada'])
+            avarie_simpla['latitudine'] = lat
+            avarie_simpla['longitudine'] = lon
+            avarie_simpla['sursa_url'] = sursa_url
 
-        try:
-            rezultat = supabase.table("avarii").upsert(
-                avarie,
-                on_conflict="sursa_url,localitate,strada,status"
-            ).execute()
+            try:
+                rezultat = supabase.table("avarii").upsert(
+                    avarie_simpla,
+                    on_conflict="sursa_url,localitate,strada,status"
+                ).execute()
 
-            if rezultat.data:
-                print(f"✅ Salvat: {avarie['localitate']} - {avarie['strada']} ({avarie['status']})")
-                notifica_abonatii(rezultat.data[0])
-        except Exception as e:
-            print(f"❌ Eroare la salvarea în Supabase: {e}")
+                if rezultat.data:
+                    print(f"✅ Salvat: {avarie_simpla['localitate']} - {avarie_simpla['strada']} ({avarie_simpla['status']})")
+                    notifica_abonatii(rezultat.data[0])
+            except Exception as e:
+                print(f"❌ Eroare la salvarea în Supabase: {e}")
+
+
+def curata_avarii_vechi():
+    """Șterge avariile care nu mai sunt din ziua curentă (data_adaugarii mai veche de azi)."""
+    inceput_azi = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    try:
+        rezultat = supabase.table("avarii").delete().lt("data_adaugarii", inceput_azi).execute()
+        nr = len(rezultat.data or [])
+        if nr:
+            print(f"🗑️  Am șters {nr} avarii vechi (din zilele anterioare).")
+    except Exception as e:
+        print(f"⚠️ Eroare la curățarea avariilor vechi: {e}")
 
 
 def preia_articole_avarii():
@@ -267,6 +298,7 @@ def articol_deja_procesat(post_url):
 
 
 def ruleaza_scanare():
+    curata_avarii_vechi()
     articole = preia_articole_avarii()
 
     for articol in articole:

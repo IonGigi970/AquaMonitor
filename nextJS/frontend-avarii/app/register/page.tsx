@@ -36,6 +36,9 @@ export default function RegisterPage() {
     const { error } = await supabase.auth.signUp({
       email,
       password: parola,
+      options: {
+        emailRedirectTo: `${window.location.origin}/login`,
+      },
     });
 
     setSeIncarca(false);
