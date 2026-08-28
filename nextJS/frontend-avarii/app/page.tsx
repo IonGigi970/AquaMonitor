@@ -153,37 +153,37 @@ export default function Home() {
             </div>
         </div>
 
-        <div className="col-span-1 lg:col-span-2 flex flex-col bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="col-span-1 lg:col-span-2 flex flex-col bg-white rounded-3xl shadow-sm border border-slate-200 isolate">
             <div className="p-4 md:p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <h2 className="text-lg font-bold text-slate-800">Harta Avariilor</h2>
             </div>
-            <div className="w-full flex-1 min-h-[500px]">
+            <div className="relative w-full flex-1 min-h-[500px] rounded-b-3xl overflow-hidden">
               <MapComponent avarii={avarii} />
             </div>
         </div>
       </div>
 
       <footer className="bg-blue-700 text-white mt-8">
-        <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div>
+        <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-center">
+          <div className="flex flex-col items-center">
             <h3 className="font-bold text-lg mb-2">AquaMonitor CT</h3>
-            <p className="text-sm text-blue-100">
+            <p className="text-sm text-blue-100 max-w-xs">
               Monitorizăm avariile de apă RAJA din Constanța și împrejurimi, în timp real.
             </p>
           </div>
-          <div>
+          <div className="flex flex-col items-center">
             <h3 className="font-bold text-lg mb-2">Contact & Sugestii</h3>
             <p className="text-sm text-blue-100">
               Ai o sugestie sau o problemă? Scrie-ne la:
             </p>
             <a
-              href="mailto:contact@aquamonitorct.ro"
+              href="mailto:aquamonitorct@gmail.com"
               className="text-sm font-semibold text-amber-300 hover:text-amber-200 transition-colors inline-block mt-1"
             >
-              contact@aquamonitorct.ro
+              aquamonitorct@gmail.com
             </a>
           </div>
-          <div>
+          <div className="flex flex-col items-center">
             <h3 className="font-bold text-lg mb-2">Linkuri utile</h3>
             <ul className="text-sm text-blue-100 space-y-1">
               <li>
