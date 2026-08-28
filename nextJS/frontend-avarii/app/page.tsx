@@ -78,7 +78,6 @@ export default function Home() {
                 AquaMonitor CT
             </div>
             <div className="flex items-center gap-6 font-semibold">
-                <a href="#" className="hover:text-blue-200 transition-colors border-b-2 border-white pb-1">Dashboard</a>
                 <Link
                   href="/membership"
                   className="hover:text-blue-200 transition-colors text-blue-100"
@@ -163,6 +162,47 @@ export default function Home() {
             </div>
         </div>
       </div>
+
+      <footer className="bg-blue-700 text-white mt-8">
+        <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div>
+            <h3 className="font-bold text-lg mb-2">AquaMonitor CT</h3>
+            <p className="text-sm text-blue-100">
+              Monitorizăm avariile de apă RAJA din Constanța și împrejurimi, în timp real.
+            </p>
+          </div>
+          <div>
+            <h3 className="font-bold text-lg mb-2">Contact & Sugestii</h3>
+            <p className="text-sm text-blue-100">
+              Ai o sugestie sau o problemă? Scrie-ne la:
+            </p>
+            <a
+              href="mailto:contact@aquamonitorct.ro"
+              className="text-sm font-semibold text-amber-300 hover:text-amber-200 transition-colors inline-block mt-1"
+            >
+              contact@aquamonitorct.ro
+            </a>
+          </div>
+          <div>
+            <h3 className="font-bold text-lg mb-2">Linkuri utile</h3>
+            <ul className="text-sm text-blue-100 space-y-1">
+              <li>
+                <Link href="/membership" className="hover:text-white transition-colors">
+                  Alertele mele
+                </Link>
+              </li>
+              <li>
+                <Link href="/sustine" className="hover:text-white transition-colors">
+                  Susține proiectul
+                </Link>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div className="border-t border-blue-600 py-4 text-center text-xs text-blue-200">
+          © {new Date().getFullYear()} AquaMonitor CT. Proiect independent, neafiliat cu RAJA.
+        </div>
+      </footer>
     </div>
   );
 }

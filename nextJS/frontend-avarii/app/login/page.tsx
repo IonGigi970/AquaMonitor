@@ -19,23 +19,32 @@ export default function LoginPage() {
     setEroare("");
     setSeIncarca(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password: parola,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password: parola,
+      });
 
-    setSeIncarca(false);
+      if (error) {
+        setEroare(
+          error.message === "Invalid login credentials"
+            ? "Email sau parolă incorectă."
+            : "A apărut o eroare la autentificare. Încearcă din nou."
+        );
+        return;
+      }
 
-    if (error) {
+      router.push("/membership");
+      router.refresh();
+    } catch (err) {
       setEroare(
-        error.message === "Invalid login credentials"
-          ? "Email sau parolă incorectă."
+        err instanceof Error && err.message
+          ? err.message
           : "A apărut o eroare la autentificare. Încearcă din nou."
       );
-      return;
+    } finally {
+      setSeIncarca(false);
     }
-
-    router.push("/membership");
   };
 
   return (
@@ -63,10 +72,12 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
+              <label htmlFor="email" className="block text-sm font-semibold text-slate-700 mb-1">
                 Email
               </label>
               <input
+                id="email"
+                name="email"
                 type="email"
                 required
                 placeholder="adresa@email.com"
@@ -77,10 +88,12 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
+              <label htmlFor="parola" className="block text-sm font-semibold text-slate-700 mb-1">
                 Parolă
               </label>
               <input
+                id="parola"
+                name="parola"
                 type="password"
                 required
                 placeholder="••••••••"

@@ -95,26 +95,28 @@ export default function MembershipForm({
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-1">
+          <label htmlFor="tip_contact" className="block text-sm font-semibold text-slate-700 mb-1">
             Canal de notificare
           </label>
           <select
+            id="tip_contact"
+            name="tip_contact"
             className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-slate-900"
             value={form.tip_contact}
             onChange={(e) => handleTipContactChange(e.target.value)}
           >
             <option value="email">Email</option>
             <option value="telegram">Telegram</option>
-            <option value="whatsapp">WhatsApp</option>
-            <option value="sms">SMS</option>
           </select>
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-1">
+          <label htmlFor="valoare_contact" className="block text-sm font-semibold text-slate-700 mb-1">
             Date de contact
           </label>
           <input
+            id="valoare_contact"
+            name="valoare_contact"
             type={form.tip_contact === "email" ? "email" : "text"}
             required
             readOnly={form.tip_contact === "email"}
@@ -135,10 +137,12 @@ export default function MembershipForm({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
+            <label htmlFor="localitate_interes" className="block text-sm font-semibold text-slate-700 mb-1">
               Localitate
             </label>
             <input
+              id="localitate_interes"
+              name="localitate_interes"
               type="text"
               required
               placeholder="Ex: Constanța"
@@ -148,10 +152,12 @@ export default function MembershipForm({
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
+            <label htmlFor="strada_interes" className="block text-sm font-semibold text-slate-700 mb-1">
               Stradă / Cartier (opțional)
             </label>
             <input
+              id="strada_interes"
+              name="strada_interes"
               type="text"
               placeholder="Ex: Faleză Nord"
               className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-slate-900 placeholder:text-slate-400"
