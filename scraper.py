@@ -146,8 +146,60 @@ def trimite_email(destinatar, avarie):
         print(f"⚠️ Eroare la trimiterea emailului către {destinatar}: {e}")
 
 
-def trimite_telegram(chat_id, avarie):
+def gaseste_chat_id_telegram(username):
+    """Rezolvă username-ul Telegram (ex: @Victoras45) în chat_id numeric.
+
+    Botul Telegram NU poate trimite către un username — are nevoie de chat_id numeric.
+    Chat_id-ul se obține doar după ce utilizatorul a pornit o conversație cu botul
+    (a apăsat /start). Căutăm întâi în tabela telegram_users, apoi interogăm getUpdates.
+    """
     if not TELEGRAM_BOT_TOKEN:
+        return None
+    username = (username or "").lstrip("@").lower()
+    if not username:
+        return None
+
+    # 1. Verificăm tabela de mapări salvate
+    try:
+        rez = supabase.table("telegram_users").select("chat_id").eq("username", username).limit(1).execute()
+        if rez.data:
+            return rez.data[0]["chat_id"]
+    except Exception:
+        pass
+
+    # 2. Interogăm getUpdates pentru a găsi chat_id-ul (dacă userul a dat /start recent)
+    try:
+        r = requests.get(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates", timeout=15)
+        updates = r.json().get("result", [])
+        for u in updates:
+            msg = u.get("message") or u.get("edited_message") or {}
+            frm = msg.get("from") or {}
+            uname = (frm.get("username") or "").lower()
+            chat_id = (msg.get("chat") or {}).get("id")
+            if uname and chat_id:
+                # Salvăm maparea pentru utilizări viitoare
+                try:
+                    supabase.table("telegram_users").upsert(
+                        {"username": uname, "chat_id": chat_id},
+                        on_conflict="username"
+                    ).execute()
+                except Exception:
+                    pass
+                if uname == username:
+                    return chat_id
+    except Exception as e:
+        print(f"⚠️ Eroare la getUpdates Telegram: {e}")
+
+    return None
+
+
+def trimite_telegram(contact, avarie):
+    if not TELEGRAM_BOT_TOKEN:
+        return
+    chat_id = gaseste_chat_id_telegram(contact)
+    if not chat_id:
+        print(f"⚠️ Nu am găsit chat_id pentru Telegram {contact}. "
+              f"Utilizatorul trebuie să pornească botul cu /start.")
         return
     try:
         data = avarie.get("data") or "?"

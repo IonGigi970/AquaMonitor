@@ -2,8 +2,8 @@ name: Scraper avarii RAJA
 
 on:
   schedule:
-    # Ruleaza la fiecare ora, in minutul 0 (GitHub Actions poate intarzia cateva minute in perioade de trafic mare)
-    - cron: "0 * * * *"
+    # Ruleaza la fiecare 30 de minute (GitHub Actions poate intarzia cateva minute in perioade de trafic mare)
+    - cron: "*/30 * * * *"
   workflow_dispatch: {}
 
 jobs:
