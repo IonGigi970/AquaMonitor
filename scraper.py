@@ -306,13 +306,24 @@ def salveaza_avarii(avarii_extrase, sursa_url, data_articol=None):
 
 
 def curata_avarii_vechi():
-    """Șterge avariile a căror dată a trecut (data < azi). Cele din azi și din viitor rămân."""
+    """Șterge avariile a căror dată a trecut (data < azi).
+
+    Rămân doar cele din azi și din viitor. Ștergem și rândurile fără dată (data NULL)
+    care au fost adăugate înainte de azi (rânduri vechi rămase de la versiuni anterioare).
+    """
     azi = datetime.now(timezone.utc).date().isoformat()
     try:
+        # 1. Avarii cu dată explicită în trecut
         rezultat = supabase.table("avarii").delete().lt("data", azi).execute()
         nr = len(rezultat.data or [])
         if nr:
             print(f"🗑️  Am șters {nr} avarii vechi (data a trecut).")
+
+        # 2. Avarii fără dată, adăugate înainte de azi (rânduri vechi rămase)
+        rezultat2 = supabase.table("avarii").delete().is_("data", "null").lt("data_adaugarii", azi).execute()
+        nr2 = len(rezultat2.data or [])
+        if nr2:
+            print(f"🗑️  Am șters {nr2} avarii vechi fără dată (adăugate înainte de azi).")
     except Exception as e:
         print(f"⚠️ Eroare la curățarea avariilor vechi: {e}")
 

@@ -22,10 +22,14 @@ export async function GET() {
     }
 
     // Alertele zilei = avariile din ziua curentă + cele din viitor.
-    // Avariile fără dată (null) le păstrăm pentru compatibilitate.
+    // Avariile fără dată (null) le păstrăm DOAR dacă au fost adăugate azi (sunt curente).
     const azi = new Date().toISOString().slice(0, 10);
     const filtrate = (data ?? []).filter(
-      (a: { data?: string | null }) => !a.data || a.data >= azi
+      (a: { data?: string | null; data_adaugarii?: string }) => {
+        if (a.data) return a.data >= azi;
+        // Fără dată: păstrăm doar dacă data_adaugarii e azi sau mai recentă
+        return !a.data_adaugarii || a.data_adaugarii.slice(0, 10) >= azi;
+      }
     );
 
     return NextResponse.json(filtrate);
