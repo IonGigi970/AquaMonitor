@@ -138,7 +138,7 @@ export default function MembershipForm({
         {form.tip_contact === "telegram" && (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
             💬 După abonare, deschide botul <b>@JimmyWaterBot</b> pe Telegram și apasă
-            <b> Start</b> o singură dată, ca să primești alertele. Fără acest pas, botul nu
+            <b> Start</b> o singură dată, ca să primești alertele. Fără acest pas, asistentul nu
             poate să-ți trimită mesaje.
           </div>
         )}
