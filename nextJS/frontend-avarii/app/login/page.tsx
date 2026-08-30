@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type SyntheticEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [eroare, setEroare] = useState("");
   const [seIncarca, setSeIncarca] = useState(false);
 
-  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setEroare("");
     setSeIncarca(true);

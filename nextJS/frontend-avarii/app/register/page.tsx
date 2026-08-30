@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type SyntheticEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -16,7 +16,7 @@ export default function RegisterPage() {
   const [mesajSucces, setMesajSucces] = useState("");
   const [seIncarca, setSeIncarca] = useState(false);
 
-  const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
+  const handleRegister = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setEroare("");
     setMesajSucces("");
