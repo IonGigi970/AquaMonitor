@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import dynamic from 'next/dynamic';
+import { formateazaData } from '@/lib/format';
 
 const MapComponent = dynamic(() => import('../components/mapComponent'), { 
   ssr: false,
@@ -22,6 +23,8 @@ interface Avarie {
   descriere_text: string;
   data_inceput?: string;
   data_sfarsit?: string;
+  data?: string | null;
+  sursa_url?: string | null;
   latitudine?: number;
   longitudine?: number;
 }
@@ -32,6 +35,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [eroareFetch, setEroareFetch] = useState("");
   const [user, setUser] = useState<User | null>(null);
+  const [arataToate, setArataToate] = useState(false);
+
+  const alerteVizibile = arataToate ? avarii : avarii.slice(0, 5);
 
   useEffect(() => {
     async function fetchAvarii() {
@@ -133,22 +139,50 @@ export default function Home() {
               ) : avarii.length === 0 ? (
                 <p className="text-slate-500">Nu există avarii active.</p>
               ) : (
-                avarii.map((item, index) => (
-                  <div key={item.id || index} className={`bg-white p-5 rounded-2xl shadow-sm border-l-4 hover:shadow-md transition-shadow relative overflow-hidden ${item.status === 'AVARIE' ? 'border-red-500' : 'border-amber-400'}`}>
-                      <div className={`absolute top-0 right-0 text-xs font-bold px-3 py-1 rounded-bl-lg ${item.status === 'AVARIE' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>
-                        {item.status}
-                      </div>
-                      <h3 className="font-bold text-lg text-slate-800 mt-2">{item.localitate}</h3>
-                      <p className="text-sm font-semibold text-slate-700 mt-1">{item.strada}</p>
-                      
-                      {(item.data_inceput || item.data_sfarsit) && (
-                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-3 bg-slate-50 p-2 rounded-lg">
-                            ⏱️ {item.data_inceput || "?"} - {item.data_sfarsit || "?"}
+                <>
+                  {alerteVizibile.map((item, index) => (
+                    <a
+                      key={item.id || index}
+                      href={item.sursa_url || "#"}
+                      target={item.sursa_url ? "_blank" : undefined}
+                      rel="noopener noreferrer"
+                      className={`block bg-white p-5 rounded-2xl shadow-sm border-l-4 hover:shadow-md transition-shadow relative overflow-hidden ${item.status === 'AVARIE' ? 'border-red-500' : 'border-amber-400'}`}
+                    >
+                        <div className={`absolute top-0 right-0 text-xs font-bold px-3 py-1 rounded-bl-lg ${item.status === 'AVARIE' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>
+                          {item.status}
                         </div>
-                      )}
-                      <p className="text-xs text-slate-600 mt-3 leading-relaxed">{item.descriere_text}</p>
-                  </div>
-                ))
+                        <h3 className="font-bold text-lg text-slate-800 mt-2">{item.localitate}</h3>
+                        <p className="text-sm font-semibold text-slate-700 mt-1">{item.strada}</p>
+
+                        {item.data && (
+                          <div className="flex items-center gap-2 text-xs font-bold text-blue-700 mt-3 bg-blue-50 p-2 rounded-lg">
+                            📅 {formateazaData(item.data)}
+                          </div>
+                        )}
+
+                        {(item.data_inceput || item.data_sfarsit) && (
+                          <div className="flex items-center gap-2 text-xs text-slate-500 mt-3 bg-slate-50 p-2 rounded-lg">
+                              ⏱️ {item.data_inceput || "?"} - {item.data_sfarsit || "?"}
+                          </div>
+                        )}
+                        <p className="text-xs text-slate-600 mt-3 leading-relaxed">{item.descriere_text}</p>
+                        {item.sursa_url && (
+                          <p className="text-xs text-blue-600 mt-2 font-semibold">
+                            Vezi comunicatul oficial RAJA →
+                          </p>
+                        )}
+                    </a>
+                  ))}
+
+                  {avarii.length > 5 && (
+                    <button
+                      onClick={() => setArataToate((v) => !v)}
+                      className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors"
+                    >
+                      {arataToate ? "Arată mai puține" : `Arată mai multe (${avarii.length - 5})`}
+                    </button>
+                  )}
+                </>
               )}
             </div>
         </div>
@@ -194,6 +228,11 @@ export default function Home() {
               <li>
                 <Link href="/sustine" className="hover:text-white transition-colors">
                   Susține proiectul
+                </Link>
+              </li>
+              <li>
+                <Link href="/gdpr" className="hover:text-white transition-colors">
+                  Confidențialitate & Termeni
                 </Link>
               </li>
             </ul>

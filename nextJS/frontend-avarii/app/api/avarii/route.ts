@@ -21,7 +21,14 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json(data ?? []);
+    // Alertele zilei = avariile din ziua curentă + cele din viitor.
+    // Avariile fără dată (null) le păstrăm pentru compatibilitate.
+    const azi = new Date().toISOString().slice(0, 10);
+    const filtrate = (data ?? []).filter(
+      (a: { data?: string | null }) => !a.data || a.data >= azi
+    );
+
+    return NextResponse.json(filtrate);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

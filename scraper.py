@@ -87,6 +87,7 @@ def extrage_avarii_din_text(text_postare):
     4. "descriere_text": Textul scurt, relevant pentru acea avarie (motivul opririi).
     5. "data_inceput": Ora estimată de începere (ex: "11:30") sau null.
     6. "data_sfarsit": Ora estimată de finalizare (ex: "17:00") sau null.
+    7. "data": Data pentru care este valabilă avaria, în format "YYYY-MM-DD" (ex: "2026-08-27"). Dacă textul menționează o dată explicită (ex: "mâine", "pe 28 august", "în data de 30 august"), folosește acea dată. Dacă nu se menționează nicio dată, pune null.
 
     Format obligatoriu:
     [
@@ -96,7 +97,8 @@ def extrage_avarii_din_text(text_postare):
         "status": "...",
         "descriere_text": "...",
         "data_inceput": "...",
-        "data_sfarsit": "..."
+        "data_sfarsit": "...",
+        "data": "YYYY-MM-DD"
       }}
     ]
 
@@ -119,6 +121,16 @@ def trimite_email(destinatar, avarie):
     if not RESEND_API_KEY:
         return
     try:
+        data = avarie.get("data") or ""
+        interval = f"{avarie.get('data_inceput', '?')} - {avarie.get('data_sfarsit', '?')}"
+        html = (
+            f"<p><b>📅 Data: {data}</b></p>"
+            f"<p><b>📍 Locație: {avarie['localitate']}, {avarie['strada']}</b></p>"
+            f"<p><b>Status: {avarie['status']}</b></p>"
+            f"<p>Interval: {interval}</p>"
+            f"<p>{avarie.get('descriere_text', '')}</p>"
+            f"<p style='color:#888;font-size:12px'>AquaMonitor CT — te-ai abonat pentru alerte pe zona ta.</p>"
+        )
         requests.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
@@ -126,13 +138,7 @@ def trimite_email(destinatar, avarie):
                 "from": RESEND_FROM_EMAIL,
                 "to": [destinatar],
                 "subject": f"🚨 Alertă apă: {avarie['localitate']} - {avarie['status']}",
-                "html": (
-                    f"<p><b>{avarie['localitate']}, {avarie['strada']}</b></p>"
-                    f"<p>Status: <b>{avarie['status']}</b></p>"
-                    f"<p>{avarie.get('descriere_text', '')}</p>"
-                    f"<p>Interval: {avarie.get('data_inceput', '?')} - {avarie.get('data_sfarsit', '?')}</p>"
-                    f"<p style='color:#888;font-size:12px'>AquaMonitor CT — te-ai abonat pentru alerte pe zona ta.</p>"
-                )
+                "html": html
             },
             timeout=15
         )
@@ -144,12 +150,14 @@ def trimite_telegram(chat_id, avarie):
     if not TELEGRAM_BOT_TOKEN:
         return
     try:
+        data = avarie.get("data") or "?"
         mesaj = (
             f"🚨 *Alertă apă*\n"
-            f"*{avarie['localitate']}, {avarie['strada']}*\n"
-            f"Status: *{avarie['status']}*\n"
-            f"{avarie.get('descriere_text', '')}\n"
-            f"Interval: {avarie.get('data_inceput', '?')} - {avarie.get('data_sfarsit', '?')}"
+            f"*📅 Data: {data}*\n"
+            f"*📍 Locație: {avarie['localitate']}, {avarie['strada']}*\n"
+            f"*Status: {avarie['status']}*\n"
+            f"Interval: {avarie.get('data_inceput', '?')} - {avarie.get('data_sfarsit', '?')}\n"
+            f"{avarie.get('descriere_text', '')}"
         )
         requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
@@ -216,7 +224,7 @@ def desparte_strazile(avarie):
     return rezultat
 
 
-def salveaza_avarii(avarii_extrase, sursa_url):
+def salveaza_avarii(avarii_extrase, sursa_url, data_articol=None):
     for avarie in avarii_extrase:
         if not (avarie.get("localitate") and avarie.get("strada")):
             continue
@@ -227,6 +235,10 @@ def salveaza_avarii(avarii_extrase, sursa_url):
             avarie_simpla['latitudine'] = lat
             avarie_simpla['longitudine'] = lon
             avarie_simpla['sursa_url'] = sursa_url
+
+            # Dacă AI-ul nu a extras o dată, folosim data publicării articolului
+            if not avarie_simpla.get("data") and data_articol:
+                avarie_simpla['data'] = data_articol.strftime("%Y-%m-%d")
 
             try:
                 rezultat = supabase.table("avarii").upsert(
@@ -242,13 +254,13 @@ def salveaza_avarii(avarii_extrase, sursa_url):
 
 
 def curata_avarii_vechi():
-    """Șterge avariile care nu mai sunt din ziua curentă (data_adaugarii mai veche de azi)."""
-    inceput_azi = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    """Șterge avariile a căror dată a trecut (data < azi). Cele din azi și din viitor rămân."""
+    azi = datetime.now(timezone.utc).date().isoformat()
     try:
-        rezultat = supabase.table("avarii").delete().lt("data_adaugarii", inceput_azi).execute()
+        rezultat = supabase.table("avarii").delete().lt("data", azi).execute()
         nr = len(rezultat.data or [])
         if nr:
-            print(f"🗑️  Am șters {nr} avarii vechi (din zilele anterioare).")
+            print(f"🗑️  Am șters {nr} avarii vechi (data a trecut).")
     except Exception as e:
         print(f"⚠️ Eroare la curățarea avariilor vechi: {e}")
 
@@ -310,7 +322,7 @@ def ruleaza_scanare():
         avarii_extrase = extrage_avarii_din_text(articol["text"])
 
         if avarii_extrase:
-            salveaza_avarii(avarii_extrase, articol["url"])
+            salveaza_avarii(avarii_extrase, articol["url"], articol.get("data"))
         else:
             print("ℹ️ Nu s-au extras avarii din acest articol.")
 

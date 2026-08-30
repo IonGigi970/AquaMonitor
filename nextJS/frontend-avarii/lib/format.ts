@@ -63,3 +63,17 @@ export function formateazaText(text?: string | null): string {
 
   return rezultat.join(" ");
 }
+
+// Formatează o dată "YYYY-MM-DD" în formă românească (ex: "27 august 2026").
+export function formateazaData(data?: string | null): string {
+  if (!data) return "";
+  const [an, luna, zi] = data.split("-");
+  if (!an || !luna || !zi) return data;
+  const luni = [
+    "ianuarie", "februarie", "martie", "aprilie", "mai", "iunie",
+    "iulie", "august", "septembrie", "octombrie", "noiembrie", "decembrie",
+  ];
+  const lunaIdx = parseInt(luna, 10) - 1;
+  if (lunaIdx < 0 || lunaIdx > 11) return data;
+  return `${parseInt(zi, 10)} ${luni[lunaIdx]} ${an}`;
+}

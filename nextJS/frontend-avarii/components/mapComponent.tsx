@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useEffect } from 'react';
+import { formateazaData } from '@/lib/format';
 
 // Definim exact structura datelor pentru TypeScript
 interface Avarie {
@@ -14,6 +15,8 @@ interface Avarie {
   descriere_text: string;
   data_inceput?: string;
   data_sfarsit?: string;
+  data?: string | null;
+  sursa_url?: string | null;
   latitudine?: number;
   longitudine?: number;
 }
@@ -96,6 +99,11 @@ export default function MapComponent({ avarii }: { avarii: Avarie[] }) {
                 <div className="font-sans">
                   <b className="text-sm">{avarie.localitate}</b><br/>
                   <span className="text-xs text-slate-600">{avarie.strada}</span><br/>
+                  {avarie.data && (
+                    <>
+                      <span className="text-xs font-bold text-blue-700">📅 {formateazaData(avarie.data)}</span><br/>
+                    </>
+                  )}
                   <span className={`text-xs font-bold ${avarie.status === 'AVARIE' ? 'text-red-500' : 'text-amber-600'}`}>
                     {avarie.status}
                   </span>
@@ -103,6 +111,19 @@ export default function MapComponent({ avarii }: { avarii: Avarie[] }) {
                     <>
                       <br/>
                       <span className="text-xs">{avarie.data_inceput} - {avarie.data_sfarsit}</span>
+                    </>
+                  )}
+                  {avarie.sursa_url && (
+                    <>
+                      <br/>
+                      <a
+                        href={avarie.sursa_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 font-semibold underline"
+                      >
+                        Comunicat RAJA →
+                      </a>
                     </>
                   )}
                 </div>
