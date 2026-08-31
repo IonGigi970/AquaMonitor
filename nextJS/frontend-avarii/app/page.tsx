@@ -83,10 +83,10 @@ export default function Home() {
             <div className="text-2xl font-bold flex items-center gap-2 tracking-tight">
                 AquaMonitor CT
             </div>
-            <div className="flex items-center gap-6 font-semibold">
+            <div className="flex flex-wrap items-center justify-center gap-3 md:gap-6 font-semibold">
                 <Link
                   href="/membership"
-                  className="hover:text-blue-200 transition-colors text-blue-100"
+                  className="hover:text-blue-200 transition-colors text-blue-100 px-2 py-1"
                 >
                   🔔 Alertele mele
                 </Link>

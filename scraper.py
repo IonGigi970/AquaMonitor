@@ -24,6 +24,27 @@ ZILE_SCANARE = int(os.getenv("ZILE_SCANARE", "2"))
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "AquaMonitor CT <onboarding@resend.dev>")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "aquamonitorct@gmail.com")
+
+
+def trimite_log_admin(subiect, html):
+    """Trimite un email de log către admin (conturi noi, notificări trimise)."""
+    if not RESEND_API_KEY or not ADMIN_EMAIL:
+        return
+    try:
+        requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "from": RESEND_FROM_EMAIL,
+                "to": [ADMIN_EMAIL],
+                "subject": subiect,
+                "html": html
+            },
+            timeout=15
+        )
+    except Exception as e:
+        print(f"⚠️ Eroare la trimiterea log-ului admin: {e}")
 
 
 def normalizeaza_text(text):
@@ -256,6 +277,20 @@ def notifica_abonatii(avarie_salvata):
             "abonament_id": abonament["id"],
             "avarie_id": avarie_salvata["id"]
         }).execute()
+
+        # Log admin: cine a fost notificat, pentru ce zonă și pe ce canal
+        canal = "Email" if tip == "email" else "Telegram" if tip == "telegram" else str(tip)
+        trimite_log_admin(
+            f"📨 Notificare trimisă: {avarie_salvata['localitate']} - {avarie_salvata['strada']}",
+            f"<p><b>Notificare trimisă</b></p>"
+            f"<p><b>📍 Zonă:</b> {avarie_salvata['localitate']}, {avarie_salvata['strada']}</p>"
+            f"<p><b>Status:</b> {avarie_salvata['status']}</p>"
+            f"<p><b>📅 Data:</b> {avarie_salvata.get('data') or 'azi'}</p>"
+            f"<p><b>👤 Către:</b> {contact}</p>"
+            f"<p><b>📡 Canal:</b> {canal}</p>"
+            f"<p><b>🗺️ Zona abonată:</b> {abonament.get('localitate_interes')}"
+            f"{' - ' + abonament.get('strada_interes') if abonament.get('strada_interes') else ''}</p>"
+        )
 
 
 def desparte_strazile(avarie):

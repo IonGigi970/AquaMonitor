@@ -1,75 +1,58 @@
 "use client";
 
-import { useState, type SyntheticEvent } from "react";
+import { useEffect, useState, type SyntheticEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
-export default function RegisterPage() {
+export default function ConfirmareResetarePage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [email, setEmail] = useState("");
   const [parola, setParola] = useState("");
   const [confirmareParola, setConfirmareParola] = useState("");
   const [eroare, setEroare] = useState("");
   const [mesajSucces, setMesajSucces] = useState("");
   const [seIncarca, setSeIncarca] = useState(false);
 
-  const handleRegister = async (e: SyntheticEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    // Supabase setează sesiunea după ce utilizatorul a dat click pe linkul din email.
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) {
+        setEroare("Linkul de resetare este invalid sau a expirat.");
+      }
+    });
+  }, [supabase]);
+
+  const handleSubmit = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setEroare("");
     setMesajSucces("");
-
-    if (parola !== confirmareParola) {
-      setEroare("Parolele introduse nu coincid.");
-      return;
-    }
 
     if (parola.length < 6) {
       setEroare("Parola trebuie să aibă cel puțin 6 caractere.");
       return;
     }
-
-    setSeIncarca(true);
-
-    const { error } = await supabase.auth.signUp({
-      email,
-      password: parola,
-      options: {
-        emailRedirectTo: `${window.location.origin}/login`,
-      },
-    });
-
-    setSeIncarca(false);
-
-    if (error) {
-      setEroare(
-        error.message.includes("already registered")
-          ? "Există deja un cont cu acest email."
-          : "A apărut o eroare la înregistrare. Încearcă din nou."
-      );
+    if (parola !== confirmareParola) {
+      setEroare("Parolele introduse nu coincid.");
       return;
     }
 
-    setMesajSucces(
-      "Cont creat cu succes! Verifică-ți emailul pentru a confirma adresa, apoi te poți autentifica."
-    );
+    setSeIncarca(true);
 
-    // Trimitem un log admin către emailul de administrare
     try {
-      await fetch("/api/log-cont-nou", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
+      const { error } = await supabase.auth.updateUser({ password: parola });
+      if (error) {
+        setEroare("A apărut o eroare la actualizarea parolei. Încearcă din nou.");
+      } else {
+        setMesajSucces("Parola a fost schimbată cu succes!");
+        setTimeout(() => router.push("/login"), 1500);
+      }
     } catch {
-      // Ignorăm erorile de log — nu blocăm înregistrarea
+      setEroare("A apărut o eroare la actualizarea parolei. Încearcă din nou.");
+    } finally {
+      setSeIncarca(false);
     }
-
-    setTimeout(() => {
-      router.push("/login");
-    }, 3000);
   };
 
   return (
@@ -84,9 +67,9 @@ export default function RegisterPage() {
 
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-8 w-full max-w-md">
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">Creează cont</h1>
+          <h1 className="text-2xl font-bold text-slate-800 mb-2">Setează o parolă nouă</h1>
           <p className="text-sm text-slate-500 mb-6">
-            Înregistrează-te ca să poți activa alerte pentru zonele tale de interes.
+            Alege o parolă nouă pentru contul tău.
           </p>
 
           {eroare && (
@@ -96,31 +79,15 @@ export default function RegisterPage() {
           )}
 
           {mesajSucces && (
-            <div className="bg-emerald-100 text-emerald-700 text-sm font-semibold p-3 rounded-xl mb-4">
+            <div className="bg-green-100 text-green-700 text-sm font-semibold p-3 rounded-xl mb-4">
               {mesajSucces}
             </div>
           )}
 
-          <form onSubmit={handleRegister} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-semibold text-slate-700 mb-1">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                placeholder="adresa@email.com"
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-slate-900 placeholder:text-slate-400"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="parola" className="block text-sm font-semibold text-slate-700 mb-1">
-                Parolă
+                Parolă nouă
               </label>
               <input
                 id="parola"
@@ -156,16 +123,9 @@ export default function RegisterPage() {
               disabled={seIncarca}
               className="w-full mt-2 bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 transition-colors disabled:bg-blue-400"
             >
-              {seIncarca ? "Se creează contul..." : "Creează cont"}
+              {seIncarca ? "Se salvează..." : "Schimbă parola"}
             </button>
           </form>
-
-          <p className="text-sm text-slate-500 mt-6 text-center">
-            Ai deja cont?{" "}
-            <Link href="/login" className="text-blue-700 font-semibold hover:underline">
-              Autentifică-te
-            </Link>
-          </p>
         </div>
       </div>
     </div>
