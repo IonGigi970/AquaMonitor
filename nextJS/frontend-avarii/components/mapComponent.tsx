@@ -11,6 +11,7 @@ interface Avarie {
   id?: string;
   localitate: string;
   strada: string;
+  cartier?: string | null;
   status: string;
   descriere_text: string;
   data_inceput?: string;
@@ -98,7 +99,9 @@ export default function MapComponent({ avarii }: { avarii: Avarie[] }) {
               <Popup>
                 <div className="font-sans">
                   <b className="text-sm">{avarie.localitate}</b><br/>
-                  <span className="text-xs text-slate-600">{avarie.strada}</span><br/>
+                  <span className="text-xs text-slate-600">
+                    {avarie.strada || avarie.cartier || "Toată localitatea"}
+                  </span><br/>
                   {avarie.data && (
                     <>
                       <span className="text-xs font-bold text-blue-700">📅 {formateazaData(avarie.data)}</span><br/>

@@ -11,6 +11,7 @@ interface Abonament {
   valoare_contact: string;
   localitate_interes: string;
   strada_interes?: string | null;
+  cartier_interes?: string | null;
 }
 
 const ETICHETE_CANAL: Record<string, string> = {
@@ -66,6 +67,7 @@ export default function ListaAbonamente({
             <p className="text-sm text-slate-500">
               {formateazaText(abonament.localitate_interes)}
               {abonament.strada_interes ? ` — ${formateazaText(abonament.strada_interes)}` : ""}
+              {abonament.cartier_interes ? ` — ${formateazaText(abonament.cartier_interes)}` : ""}
             </p>
           </div>
           <button

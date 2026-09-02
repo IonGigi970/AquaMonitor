@@ -31,6 +31,7 @@ export default function MembershipForm({
     valoare_contact: userEmail,
     localitate_interes: "",
     strada_interes: "",
+    cartier_interes: "",
   });
   const [seSalveaza, setSeSalveaza] = useState(false);
   const [mesaj, setMesaj] = useState<{ text: string; tip: "success" | "error" } | null>(null);
@@ -54,6 +55,7 @@ export default function MembershipForm({
       valoare_contact: form.valoare_contact.trim(),
       localitate_interes: normalizeazaText(form.localitate_interes),
       strada_interes: normalizeazaText(form.strada_interes),
+      cartier_interes: normalizeazaText(form.cartier_interes),
     };
 
     const { error } = await supabase.from("abonamente").insert([dateCuratate]);
@@ -72,6 +74,7 @@ export default function MembershipForm({
       valoare_contact: userEmail,
       localitate_interes: "",
       strada_interes: "",
+      cartier_interes: "",
     });
     router.refresh();
   };
@@ -143,7 +146,7 @@ export default function MembershipForm({
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-4">
           <div>
             <label htmlFor="localitate_interes" className="block text-sm font-semibold text-slate-700 mb-1">
               Localitate
@@ -159,20 +162,40 @@ export default function MembershipForm({
               onChange={(e) => setForm({ ...form, localitate_interes: e.target.value })}
             />
           </div>
-          <div>
-            <label htmlFor="strada_interes" className="block text-sm font-semibold text-slate-700 mb-1">
-              Stradă / Cartier (opțional)
-            </label>
-            <input
-              id="strada_interes"
-              name="strada_interes"
-              type="text"
-              placeholder="Ex: Faleză Nord"
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-slate-900 placeholder:text-slate-400"
-              value={form.strada_interes}
-              onChange={(e) => setForm({ ...form, strada_interes: e.target.value })}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="strada_interes" className="block text-sm font-semibold text-slate-700 mb-1">
+                Stradă (opțional)
+              </label>
+              <input
+                id="strada_interes"
+                name="strada_interes"
+                type="text"
+                placeholder="Ex: Faleză Nord"
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-slate-900 placeholder:text-slate-400"
+                value={form.strada_interes}
+                onChange={(e) => setForm({ ...form, strada_interes: e.target.value })}
+              />
+            </div>
+            <div>
+              <label htmlFor="cartier_interes" className="block text-sm font-semibold text-slate-700 mb-1">
+                Cartier / Zonă (opțional)
+              </label>
+              <input
+                id="cartier_interes"
+                name="cartier_interes"
+                type="text"
+                placeholder="Ex: Tomis 3"
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-slate-900 placeholder:text-slate-400"
+                value={form.cartier_interes}
+                onChange={(e) => setForm({ ...form, cartier_interes: e.target.value })}
+              />
+            </div>
           </div>
+          <p className="text-xs text-slate-400">
+            Completează o stradă <b>sau</b> un cartier/zonă. Dacă pui ambele, primești alerte când se
+            potrivește oricare dintre ele.
+          </p>
         </div>
 
         <button

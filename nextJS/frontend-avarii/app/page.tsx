@@ -19,6 +19,7 @@ interface Avarie {
   id?: string;
   localitate: string;
   strada: string;
+  cartier?: string | null;
   status: string;
   descriere_text: string;
   data_inceput?: string;
@@ -152,7 +153,9 @@ export default function Home() {
                           {item.status}
                         </div>
                         <h3 className="font-bold text-lg text-slate-800 mt-2">{item.localitate}</h3>
-                        <p className="text-sm font-semibold text-slate-700 mt-1">{item.strada}</p>
+                        <p className="text-sm font-semibold text-slate-700 mt-1">
+                          {item.strada || item.cartier || "Toată localitatea"}
+                        </p>
 
                         {item.data && (
                           <div className="flex items-center gap-2 text-xs font-bold text-blue-700 mt-3 bg-blue-50 p-2 rounded-lg">
