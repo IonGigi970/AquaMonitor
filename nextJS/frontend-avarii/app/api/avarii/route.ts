@@ -21,14 +21,26 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Alertele zilei = avariile din ziua curentă + cele din viitor.
-    // Avariile fără dată (null) le păstrăm DOAR dacă au fost adăugate azi (sunt curente).
-    const azi = new Date().toISOString().slice(0, 10);
+    // Alertele active = avariile de ieri, azi și din viitor.
+    // RAJA anunță deseori avarii care încep într-o zi și continuă în următoarea
+    // (ex: avarie anunțată pentru 2 sept, 13:30-17:00, dar care încă afectează azi dimineață).
+    // Păstrăm avarii cu data >= ieri, ca să nu dispară înainte de finalizare.
+    const azi = new Date();
+    const ieri = new Date(azi);
+    ieri.setDate(ieri.getDate() - 1);
+    const ieriStr = ieri.toISOString().slice(0, 10);
+    const aziStr = azi.toISOString().slice(0, 10);
+
     const filtrate = (data ?? []).filter(
-      (a: { data?: string | null; data_adaugarii?: string }) => {
-        if (a.data) return a.data >= azi;
-        // Fără dată: păstrăm doar dacă data_adaugarii e azi sau mai recentă
-        return !a.data_adaugarii || a.data_adaugarii.slice(0, 10) >= azi;
+      (a: { data?: string | null; data_adaugarii?: string; status?: string }) => {
+        // Nu afișăm avarii marcate explicit ca remediate
+        if (a.status === "REMEDIAT") return false;
+        // Fără dată: păstrăm doar dacă au fost adăugate azi sau ieri (sunt curente)
+        if (!a.data) {
+          const adaugata = a.data_adaugarii ? a.data_adaugarii.slice(0, 10) : aziStr;
+          return adaugata >= ieriStr;
+        }
+        return a.data >= ieriStr;
       }
     );
 

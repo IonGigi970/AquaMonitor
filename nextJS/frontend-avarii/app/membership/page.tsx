@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import MembershipForm from "./membershipForm";
 import ListaAbonamente from "./listaAbonamente";
+import AdminTelegram from "./adminTelegram";
 
 export default async function MembershipPage() {
   const supabase = await createClient();
@@ -17,6 +18,11 @@ export default async function MembershipPage() {
     .select("*")
     .eq("user_id", data.user.id)
     .order("created_at", { ascending: false });
+
+  const adminEmails = (process.env.ADMIN_EMAILS || "aquamonitorct@gmail.com")
+    .split(",")
+    .map((e) => e.trim().toLowerCase());
+  const isAdmin = !!data.user.email && adminEmails.includes(data.user.email.toLowerCase());
 
   return (
     <div className="bg-slate-50 min-h-screen flex flex-col">
@@ -52,6 +58,15 @@ export default async function MembershipPage() {
             <ListaAbonamente abonamente={abonamente} userId={data.user.id} />
           )}
         </div>
+
+        {isAdmin && (
+          <div className="mt-8">
+            <h2 className="text-lg font-bold text-slate-800 mb-4">
+              Utilizatori Telegram cu /start
+            </h2>
+            <AdminTelegram userEmail={data.user.email ?? ""} />
+          </div>
+        )}
       </div>
     </div>
   );

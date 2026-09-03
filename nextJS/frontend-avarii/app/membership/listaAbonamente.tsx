@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formateazaText } from "@/lib/format";
@@ -20,6 +20,27 @@ const ETICHETE_CANAL: Record<string, string> = {
   whatsapp: "WhatsApp",
   sms: "SMS",
 };
+
+function StatusTelegram({ username }: { username: string }) {
+  const [status, setStatus] = useState<"loading" | "ok" | "missing" | "error">("loading");
+
+  useEffect(() => {
+    fetch(`/api/telegram/check?username=${encodeURIComponent(username.replace(/^@/, ""))}`)
+      .then((r) => r.json())
+      .then((data) => setStatus(data.found ? "ok" : "missing"))
+      .catch(() => setStatus("error"));
+  }, [username]);
+
+  if (status === "loading") return <span className="text-xs text-slate-400">se verifică...</span>;
+  if (status === "ok")
+    return <span className="text-xs font-semibold text-emerald-600">✅ Botul te recunoaște</span>;
+  if (status === "error") return <span className="text-xs text-red-500">eroare verificare</span>;
+  return (
+    <span className="text-xs text-orange-600">
+      ⚠️ Nu ai apăsat /start în <b>@JimmyWaterBot</b>
+    </span>
+  );
+}
 
 export default function ListaAbonamente({
   abonamente,
@@ -64,6 +85,11 @@ export default function ListaAbonamente({
               {ETICHETE_CANAL[abonament.tip_contact] ?? abonament.tip_contact}
             </span>
             <p className="text-sm font-semibold text-slate-800">{abonament.valoare_contact}</p>
+            {abonament.tip_contact === "telegram" && abonament.valoare_contact && (
+              <div className="mt-1">
+                <StatusTelegram username={abonament.valoare_contact} />
+              </div>
+            )}
             <p className="text-sm text-slate-500">
               {formateazaText(abonament.localitate_interes)}
               {abonament.strada_interes ? ` — ${formateazaText(abonament.strada_interes)}` : ""}

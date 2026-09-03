@@ -406,24 +406,32 @@ def salveaza_avarii(avarii_extrase, sursa_url, data_articol=None):
 
 
 def curata_avarii_vechi():
-    """Șterge avariile a căror dată a trecut (data < azi).
+    """Șterge avariile a căror dată a trecut de mai mult de o zi (data < ieri).
 
-    Rămân doar cele din azi și din viitor. Ștergem și rândurile fără dată (data NULL)
-    care au fost adăugate înainte de azi (rânduri vechi rămase de la versiuni anterioare).
+    RAJA anunță avarii care încep într-o zi și continuă în următoarea. Păstrăm
+    avariile de ieri, azi și din viitor, ca să nu dispară înainte de finalizare.
     """
-    azi = datetime.now(timezone.utc).date().isoformat()
+    azi = datetime.now(timezone.utc).date()
+    ieri = (azi - timedelta(days=1)).isoformat()
+    azi_str = azi.isoformat()
     try:
-        # 1. Avarii cu dată explicită în trecut
-        rezultat = supabase.table("avarii").delete().lt("data", azi).execute()
+        # 1. Avarii cu dată explicită mai veche de ieri
+        rezultat = supabase.table("avarii").delete().lt("data", ieri).execute()
         nr = len(rezultat.data or [])
         if nr:
-            print(f"🗑️  Am șters {nr} avarii vechi (data a trecut).")
+            print(f"🗑️  Am șters {nr} avarii vechi (data < {ieri}).")
 
-        # 2. Avarii fără dată, adăugate înainte de azi (rânduri vechi rămase)
-        rezultat2 = supabase.table("avarii").delete().is_("data", "null").lt("data_adaugarii", azi).execute()
+        # 2. Avarii fără dată, adăugate înainte de ieri (rânduri vechi rămase)
+        rezultat2 = supabase.table("avarii").delete().is_("data", "null").lt("data_adaugarii", ieri).execute()
         nr2 = len(rezultat2.data or [])
         if nr2:
-            print(f"🗑️  Am șters {nr2} avarii vechi fără dată (adăugate înainte de azi).")
+            print(f"🗑️  Am șters {nr2} avarii vechi fără dată (adăugate înainte de ieri).")
+
+        # 3. Avarii marcate REMEDIAT, adăugate înainte de azi (nu mai sunt active)
+        rezultat3 = supabase.table("avarii").delete().eq("status", "REMEDIAT").lt("data_adaugarii", azi_str).execute()
+        nr3 = len(rezultat3.data or [])
+        if nr3:
+            print(f"🗑️  Am șters {nr3} avarii remediate (nu mai sunt active).")
     except Exception as e:
         print(f"⚠️ Eroare la curățarea avariilor vechi: {e}")
 
