@@ -75,11 +75,11 @@ export default function AdminTelegram({ userEmail }: { userEmail: string }) {
               <td className="px-4 py-2 font-mono text-slate-900">
                 @{u.username}
               </td>
-              <td className="px-4 py-2">
+              <td className="px-4 py-2 text-slate-900">
                 {[u.first_name, u.last_name].filter(Boolean).join(" ") || "-"}
               </td>
-              <td className="px-4 py-2 font-mono">{u.chat_id}</td>
-              <td className="px-4 py-2">
+              <td className="px-4 py-2 font-mono text-slate-900">{u.chat_id}</td>
+              <td className="px-4 py-2 text-slate-900">
                 {new Date(u.first_seen).toLocaleString("ro-RO")}
               </td>
               <td className="px-4 py-2">
