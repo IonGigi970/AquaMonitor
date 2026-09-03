@@ -17,11 +17,11 @@ function cleanEnv(value?: string): string {
 
 async function handleTrigger(request: Request) {
   const cronSecret = cleanEnv(process.env.CRON_SECRET);
-  const githubToken = cleanEnv(process.env.GITHUB_TOKEN);
+  const githubToken = cleanEnv(process.env.GH_TOKEN);
 
   if (!cronSecret || !githubToken) {
     return NextResponse.json(
-      { error: "CRON_SECRET sau GITHUB_TOKEN nu sunt configurate in Vercel" },
+      { error: "CRON_SECRET sau GH_TOKEN nu sunt configurate in Vercel" },
       { status: 500 }
     );
   }
