@@ -60,16 +60,32 @@ def normalizeaza_text(text):
     return text.strip()
 
 
+def este_punct_termic(cartier_curat):
+    """Reperele de tip 'PT 3' / 'punct termic X' nu au o locație reală în OpenStreetMap.
+    Cautarea lor esueaza mereu, iar fallback-ul pe centrul localitatii ar plasa un pin
+    exact in mijlocul orasului, ceea ce e inselator (pare o locatie precisa, dar nu e).
+    Le tratam separat: nu incercam sa le geocodam deloc."""
+    if not cartier_curat:
+        return False
+    text = cartier_curat.strip()
+    if text == "pt" or text.startswith("pt ") or text.startswith("pt."):
+        return True
+    return "punct termic" in text
+
+
 def obtine_coordonate(localitate, strada, cartier=None):
     """Transformă o adresă în coordonate GPS cu reguli de curățare a textului."""
     try:
-        time.sleep(1)  # Pauză obligatorie pentru Nominatim
-
         strada_curata = strada.lower() if strada else ""
         cartier_curat = cartier.lower() if cartier else ""
 
         if "toată" in strada_curata or "nespecificata" in strada_curata or not strada_curata:
             # Dacă nu avem stradă, încercăm cartierul, altfel doar localitatea
+            if cartier_curat and este_punct_termic(cartier_curat):
+                # Nu geocodam punctele termice: nu au adresa reala, iar un pin
+                # "aproximativ" in centrul orasului ar induce in eroare utilizatorii.
+                # Avaria tot apare in lista textuala, doar nu primeste pin pe harta.
+                return None, None
             if cartier_curat:
                 query = f"{cartier_curat}, {localitate}, Romania"
             else:
@@ -78,8 +94,12 @@ def obtine_coordonate(localitate, strada, cartier=None):
             if "," in strada_curata:
                 strada_curata = strada_curata.split(",")[0]
             strada_curata = strada_curata.replace("strada ", "").strip()
-            query = f"{strada_curata}, {localitate}, Romania"
+            # Adaugam "strada" ca indiciu pentru Nominatim, altfel nume scurte si comune
+            # (ex: "Verde") sunt confundate cu localitati/zone omonime (ex: satul "Movila
+            # Verde") in loc de strada respectiva din Constanta.
+            query = f"strada {strada_curata}, {localitate}, Romania"
 
+        time.sleep(1)  # Pauză obligatorie pentru Nominatim
         url = f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1"
         headers = {'User-Agent': 'AquaMonitorCT-Scraper/2.0'}
 
