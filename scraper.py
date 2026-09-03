@@ -86,6 +86,42 @@ def este_punct_termic(cartier_curat):
     return "punct termic" in text
 
 
+# Tipuri de obiecte din reverse-geocoding care NU sunt o stradă reală (drum carosabil).
+# O stație de autobuz sau o porțiune de footway din parc se numesc adesea la fel ca
+# strada, dar nu sunt strada — le respingem explicit.
+TIPURI_NON_DRUM = {"bus_stop", "footway", "path", "steps", "pedestrian", "cycleway", "track", "service", "bridleway"}
+
+
+def verifica_strada(lat, lon, strada_curata):
+    """Reverse-geocoding: confirmă că punctul (lat, lon) e chiar pe strada căutată.
+    Geocodarea poate returna o stație de autobuz, o stradă omonimă din alt oraș sau
+    o porțiune de footway din parc. Verificăm numele străzii la punctul găsit și
+    respingem tipurile care nu sunt drum (bus_stop, footway etc.). Dacă nu se
+    potrivește, respingem rezultatul (mai bine fără pin decât pin greșit)."""
+    try:
+        time.sleep(1)  # Pauză obligatorie pentru Nominatim
+        url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&zoom=18"
+        headers = {'User-Agent': 'AquaMonitorCT-Scraper/2.0'}
+        raspuns = requests.get(url, headers=headers, timeout=15)
+        if raspuns.status_code == 200:
+            date = raspuns.json()
+            tip = date.get("type", "")
+            if tip in TIPURI_NON_DRUM:
+                return False  # stație de autobuz / footway / etc., nu strada
+            nume = date.get("display_name", "")
+            nume_norm = normalizeaza_text(nume)
+            strada_norm = normalizeaza_text(strada_curata)
+            # Verificăm dacă numele străzii apare în adresa punctului găsit.
+            # Folosim cuvinte întregi ca să nu confundăm "Verde" cu "Movila Verde".
+            cuvinte = [c for c in strada_norm.split() if len(c) > 2]
+            if cuvinte and all(c in nume_norm for c in cuvinte):
+                return True
+            return False
+    except Exception as e:
+        print(f"⚠️ Eroare la verificarea străzii {strada_curata}: {e}")
+    return False
+
+
 def alege_cel_mai_bun_rezultat(date, prefera_clasa):
     """Alege rezultatul cel mai potrivit din lista Nominatim.
     Nominatim ordoneaza dupa relevanta, dar uneori pune pe primul loc un rezultat
@@ -148,7 +184,19 @@ def obtine_coordonate(localitate, strada, cartier=None):
             date = raspuns.json()
             ales = alege_cel_mai_bun_rezultat(date, prefera_clasa)
             if ales:
-                return float(ales['lat']), float(ales['lon'])
+                lat, lon = float(ales['lat']), float(ales['lon'])
+                # Pentru străzi, confirmăm că punctul e chiar pe strada căutată.
+                # Dacă nu, încercăm următorii candidați; dacă niciunul nu se
+                # potrivește, nu punem pin (mai bine fără pin decât pin greșit).
+                if prefera_clasa == "highway":
+                    for candidat in date:
+                        if candidat.get("class") != "highway" or candidat.get("type") == "bus_stop":
+                            continue
+                        clat, clon = float(candidat['lat']), float(candidat['lon'])
+                        if verifica_strada(clat, clon, strada_curata):
+                            return clat, clon
+                    return None, None
+                return lat, lon
             else:
                 if query != f"{localitate}, Romania":
                     fallback_url = f"https://nominatim.openstreetmap.org/search?q={localitate}, Romania&format=json&limit=5"
