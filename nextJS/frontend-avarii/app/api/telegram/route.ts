@@ -9,18 +9,8 @@ function cleanEnv(value?: string): string {
 const supabaseUrl = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const supabaseServiceKey = cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const TELEGRAM_SECRET = cleanEnv(process.env.TELEGRAM_WEBHOOK_SECRET);
-
 export async function POST(request: Request) {
   try {
-    // Dacă e configurat un secret de webhook, validăm antetul
-    if (TELEGRAM_SECRET) {
-      const headerSecret = request.headers.get('x-telegram-bot-api-secret-token');
-      if (headerSecret !== TELEGRAM_SECRET) {
-        return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
-      }
-    }
-
     const update = await request.json();
     const message = update?.message || update?.edited_message;
     if (!message) {

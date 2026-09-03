@@ -70,9 +70,9 @@ export default function AdminTelegram({ userEmail }: { userEmail: string }) {
           {users.map((u) => (
             <tr
               key={u.username}
-              className={`border-t border-slate-100 ${u.activ ? "" : "bg-slate-50 text-slate-400"}`}
+              className={`border-t border-slate-100 ${u.activ ? "" : "bg-slate-50"}`}
             >
-              <td className={`px-4 py-2 font-mono ${u.activ ? "" : "line-through"}`}>
+              <td className="px-4 py-2 font-mono text-slate-900">
                 @{u.username}
               </td>
               <td className="px-4 py-2">
