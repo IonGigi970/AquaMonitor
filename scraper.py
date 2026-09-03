@@ -60,6 +60,19 @@ def normalizeaza_text(text):
     return text.strip()
 
 
+# Coordonate corecte pentru strazi pe care geocodarea (Nominatim/OpenStreetMap)
+# le plaseaza gresit in mod constant (ex: o statie de autobuz in locul strazii,
+# o strada omonima din alt oras, sau o portiune de footway din parc).
+# Cheia = numele strazii normalizat (litere mici, fara diacritice, fara prefix "strada").
+# Valoarea = (latitudine, longitudine) verificate manual pe harta.
+COORDONATE_CUNOSCUTE = {
+    "i.c. bratianu": (44.1705329, 28.6006419),   # bulevardul din Constanta (nu strada omonima din Mangalia)
+    "soveja": (44.2014674, 28.6281196),          # segmentul din Tomis 3
+    "rotterdam": (44.1996941, 28.6565113),       # portiunea rezidentiala, nu footway-ul din parc
+    "pescarilor": (44.2013851, 28.6522633),      # strada reala, nu statia de autobuz
+}
+
+
 def este_punct_termic(cartier_curat):
     """Reperele de tip 'PT 3' / 'punct termic X' nu au o locație reală în OpenStreetMap.
     Cautarea lor esueaza mereu, iar fallback-ul pe centrul localitatii ar plasa un pin
@@ -114,6 +127,11 @@ def obtine_coordonate(localitate, strada, cartier=None):
             if "," in strada_curata:
                 strada_curata = strada_curata.split(",")[0]
             strada_curata = strada_curata.replace("strada ", "").strip()
+            # Daca strada e in lista celor cu coordonate cunoscute (verificate manual),
+            # o folosim direct, fara sa mai apelam geocodarea nesigura.
+            cheie = normalizeaza_text(strada_curata)
+            if cheie in COORDONATE_CUNOSCUTE:
+                return COORDONATE_CUNOSCUTE[cheie]
             # Adaugam "strada" ca indiciu pentru Nominatim, altfel nume scurte si comune
             # (ex: "Verde") sunt confundate cu localitati/zone omonime (ex: satul "Movila
             # Verde") in loc de strada respectiva din Constanta.
