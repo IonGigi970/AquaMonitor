@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import MembershipForm from "./membershipForm";
 import ListaAbonamente from "./listaAbonamente";
 import AdminTelegram from "./adminTelegram";
+import AdminStats from "./adminStats";
 
 export default async function MembershipPage() {
   const supabase = await createClient();
@@ -60,12 +61,21 @@ export default async function MembershipPage() {
         </div>
 
         {isAdmin && (
-          <div className="mt-8">
-            <h2 className="text-lg font-bold text-slate-800 mb-4">
-              Utilizatori Telegram cu /start
-            </h2>
-            <AdminTelegram userEmail={data.user.email ?? ""} />
-          </div>
+          <>
+            <div className="mt-8">
+              <h2 className="text-lg font-bold text-slate-800 mb-4">
+                Statistici (admin)
+              </h2>
+              <AdminStats userEmail={data.user.email ?? ""} />
+            </div>
+
+            <div className="mt-8">
+              <h2 className="text-lg font-bold text-slate-800 mb-4">
+                Utilizatori Telegram cu /start
+              </h2>
+              <AdminTelegram userEmail={data.user.email ?? ""} />
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -4,6 +4,7 @@ import { useEffect, useState, type SyntheticEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import PasswordInput from "@/components/passwordInput";
 
 export default function ConfirmareResetarePage() {
   const router = useRouter();
@@ -89,14 +90,12 @@ export default function ConfirmareResetarePage() {
               <label htmlFor="parola" className="block text-sm font-semibold text-slate-700 mb-1">
                 Parolă nouă
               </label>
-              <input
+              <PasswordInput
                 id="parola"
                 name="parola"
-                type="password"
                 required
                 minLength={6}
                 placeholder="Minim 6 caractere"
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-slate-900 placeholder:text-slate-400"
                 value={parola}
                 onChange={(e) => setParola(e.target.value)}
               />
@@ -106,13 +105,11 @@ export default function ConfirmareResetarePage() {
               <label htmlFor="confirmareParola" className="block text-sm font-semibold text-slate-700 mb-1">
                 Confirmă parola
               </label>
-              <input
+              <PasswordInput
                 id="confirmareParola"
                 name="confirmareParola"
-                type="password"
                 required
                 placeholder="••••••••"
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-slate-900 placeholder:text-slate-400"
                 value={confirmareParola}
                 onChange={(e) => setConfirmareParola(e.target.value)}
               />
