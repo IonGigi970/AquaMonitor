@@ -38,34 +38,47 @@ export async function POST(request: Request) {
     const chatId = BigInt(chat.id);
     const username = chat.username || user?.username;
 
-    // Salvăm doar la /start (sau orice mesaj, pentru a actualiza chat_id)
-    if (text === '/start' || username) {
-      if (!supabaseServiceKey) {
-        console.error('SUPABASE_SERVICE_ROLE_KEY lipseste');
-        return NextResponse.json({ ok: false, error: 'service key missing' }, { status: 500 });
-      }
+    if (!supabaseServiceKey) {
+      console.error('SUPABASE_SERVICE_ROLE_KEY lipseste');
+      return NextResponse.json({ ok: false, error: 'service key missing' }, { status: 500 });
+    }
 
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-      const upsertData: Record<string, unknown> = {
-        chat_id: Number(chatId),
-        first_seen: new Date().toISOString(),
-      };
+    const upsertData: Record<string, unknown> = {
+      chat_id: Number(chatId),
+      first_seen: new Date().toISOString(),
+    };
 
-      if (chat.first_name) upsertData.first_name = chat.first_name;
-      if (chat.last_name) upsertData.last_name = chat.last_name;
+    if (chat.first_name) upsertData.first_name = chat.first_name;
+    if (chat.last_name) upsertData.last_name = chat.last_name;
 
-      if (username) {
-        upsertData.username = username.toLowerCase();
-        await supabase
-          .from('telegram_users')
-          .upsert(upsertData, { onConflict: 'username' });
-      } else if (chat.id) {
-        // Dacă nu avem username, upsertăm după chat_id (necesită index unic pe chat_id)
-        await supabase
-          .from('telegram_users')
-          .upsert({ ...upsertData, username: `id_${chat.id}` }, { onConflict: 'username' });
-      }
+    const dezabonareComenzi = ['/stop', '/dezabonare', 'stop', 'dezabonare'];
+    const esteDezabonare = dezabonareComenzi.includes(text);
+    const esteStart = text === '/start';
+
+    if (username) {
+      upsertData.username = username.toLowerCase();
+    } else if (chat.id) {
+      upsertData.username = `id_${chat.id}`;
+    }
+
+    if (esteDezabonare) {
+      // Utilizatorul renunta la notificari. Marcam inactiv; daca nu exista rand,
+      // cream unul inactiv pentru consistenta.
+      upsertData.activ = false;
+      await supabase
+        .from('telegram_users')
+        .upsert(upsertData, { onConflict: 'username' });
+      return NextResponse.json({ ok: true, action: 'dezabonat' });
+    }
+
+    if (esteStart || username) {
+      // Dupa /start (sau orice mesaj care vine cu username) reactivam notificarile.
+      upsertData.activ = true;
+      await supabase
+        .from('telegram_users')
+        .upsert(upsertData, { onConflict: 'username' });
     }
 
     return NextResponse.json({ ok: true });

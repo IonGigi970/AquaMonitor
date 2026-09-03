@@ -13,10 +13,8 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'aquamonitorct@gmail.com')
   .split(',')
   .map((e) => e.trim().toLowerCase());
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   try {
-    // Verificăm rapid un header Authorization cu email (nu e autentificare reală,
-    // dar protejează împotriva scrapingului public)
     const authHeader = request.headers.get('Authorization') || '';
     const email = authHeader.replace(/^Bearer\s+/i, '').trim().toLowerCase();
     if (!email || !ADMIN_EMAILS.includes(email)) {
@@ -27,18 +25,28 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'service key missing' }, { status: 500 });
     }
 
+    const body = await request.json();
+    const username = (body?.username || '').replace(/^@/, '').trim().toLowerCase();
+    const activ = typeof body?.activ === 'boolean' ? body.activ : undefined;
+
+    if (!username || activ === undefined) {
+      return NextResponse.json({ error: 'username si activ sunt obligatorii' }, { status: 400 });
+    }
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { data, error } = await supabase
       .from('telegram_users')
-      .select('username, chat_id, first_seen, first_name, last_name, activ')
-      .order('first_seen', { ascending: false });
+      .update({ activ })
+      .eq('username', username)
+      .select('username, chat_id, activ, first_seen')
+      .single();
 
     if (error) {
-      console.error('Telegram users error:', error.message);
+      console.error('Telegram toggle error:', error.message);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ users: data ?? [] });
+    return NextResponse.json({ ok: true, user: data });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

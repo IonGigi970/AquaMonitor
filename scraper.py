@@ -304,7 +304,8 @@ def gaseste_chat_id_telegram(username):
 
     # 1. Verificăm tabela de mapări salvate
     try:
-        rez = supabase.table("telegram_users").select("chat_id").eq("username", username).limit(1).execute()
+        rez = supabase.table("telegram_users").select("chat_id").eq("username", 
+username).eq("activ", True).limit(1).execute()
         if rez.data:
             return rez.data[0]["chat_id"]
     except Exception:
@@ -323,7 +324,7 @@ def gaseste_chat_id_telegram(username):
                 # Salvăm maparea pentru utilizări viitoare
                 try:
                     supabase.table("telegram_users").upsert(
-                        {"username": uname, "chat_id": chat_id},
+                        {"username": uname, "chat_id": chat_id, "activ": True},
                         on_conflict="username"
                     ).execute()
                 except Exception:
