@@ -106,19 +106,22 @@ def extrage_avarii_din_text(text_postare):
     """Trimite textul UNUI SINGUR articol către Gemini și returnează lista de avarii extrase."""
     prompt = f"""
     Analizează acest text despre avariile RAJA. Extrage TOATE zonele afectate și returnează-le într-un format JSON de tip ARRAY (listă de obiecte), fără markdown sau alte texte.
-    Reguli de extracție pentru fiecare obiect din array:
-    1. "localitate": Numele localității (ex: "Constanța", "Hârșova").
-    2. "strada": Extrage DOAR numele oficial al străzii, absolut FĂRĂ alte detalii (fără numere de bloc, fără text în paranteze, fără cuvinte precum "strada", "bulevardul", "adiacentele"). Dacă sunt mai multe, separă-le prin virgulă. Dacă e toată localitatea, scrie "Toată localitatea". Dacă textul menționează DOAR un cartier/zonă și nicio stradă specifică, pune null. Exemplu corect: "Prelungirea Ion Rațiu". Exemplu greșit: "strada Prelungirea Ion Rațiu (blocurile PA1)".
-    3. "cartier": Numele cartierului sau zonei, dacă textul îl menționează (ex: "Tomis 3", "Faleză Nord", "Inel II", "Boreal", "Casa de Cultură"). Dacă textul specifică o stradă concretă, pune null. Dacă nu se menționează niciun cartier, pune null.
-    4. "status": Alege între "AVARIE", "PRESIUNE SCĂZUTĂ" sau "REMEDIAT".
-    5. "descriere_text": Textul scurt, relevant pentru acea avarie (motivul opririi).
-    6. "data_inceput": Ora estimată de începere (ex: "11:30") sau null.
-    7. "data_sfarsit": Ora estimată de finalizare (ex: "17:00") sau null.
-    8. "data": Data pentru care este valabilă avaria, în format "YYYY-MM-DD" (ex: "2026-08-27"). Dacă textul menționează o dată explicită (ex: "mâine", "pe 28 august", "în data de 30 august"), folosește acea dată. Dacă nu se menționează nicio dată, pune null.
+    Reguli de extracție:
+    1. "localitate": Numele localității (ex: "Constanța", "Hârșova"). Fiecare obiect își păstrează localitatea lui.
+    2. UN ANUNȚ poate afecta MAI MULTE zone de tipuri diferite (ex: străzi ȘI cartiere/zone deodată). Identifică TOATE zonele afectate menționate explicit și creează câte UN OBIECT SEPARAT pentru fiecare. Nu elimina nicio zonă numită în text.
+    3. Pentru fiecare obiect, stabilește tipul zonei:
+       - STRADĂ (stradă, bulevard, alee, șosea, drum cu nume oficial) → completezi "strada" cu numele oficial, fără prefix (strada, bulevardul etc.), fără numere de bloc, fără text în paranteze, fără tronsoane (detalii gen "tronsonul între X și Y" trec în "descriere_text"). Dacă aceeași enumerare conține mai multe străzi, separă-le prin virgulă în același obiect. Dacă e toată localitatea, scrie "Toată localitatea". În acest caz "cartier" = null. Exemplu corect: "I.C. Brătianu". Exemplu greșit: "bulevardul I.C. Brătianu (tronsonul dintre Sabroso și 1 Decembrie 1918)".
+       - CARTIER/ZONĂ/REPER (cartier, zonă, piață, parc, gară, autogară, hotel, punct termic, km rutier etc. — ex: "Abator", "Far", "KM 4", "Gara CFR", "Autogara Constanța", "Hotel Maria", "Casa de Cultură", "Tomis 3") → completezi "cartier" și "strada" = null.
+    4. Nu inventa zone care nu apar explicit în text. Ignoră sintagmele vagi care nu denumesc o zonă concretă (ex: "punctele termice aferente", "consumatorii din zona adiacentă", "zonele limitrofe").
+    5. "status": Alege între "AVARIE", "PRESIUNE SCĂZUTĂ" sau "REMEDIAT".
+    6. "descriere_text": Textul scurt, relevant pentru acea avarie (motivul opririi).
+    7. "data_inceput": Ora estimată de începere (ex: "11:30") sau null.
+    8. "data_sfarsit": Ora estimată de finalizare (ex: "17:00") sau null.
+    9. "data": Data pentru care este valabilă avaria, în format "YYYY-MM-DD" (ex: "2026-08-27"). Dacă textul menționează o dată explicită (ex: "mâine", "pe 28 august", "în data de 30 august"), folosește acea dată. Dacă nu se menționează nicio dată, pune null.
 
-    IMPORTANT: "strada" și "cartier" sunt EXCLUSIVE — dacă e o stradă, "cartier" e null; dacă e un cartier/zonă, "strada" e null. Cel puțin unul dintre ele trebuie să fie completat.
+    Exemplu: dacă textul spune "sunt afectați consumatorii de pe bulevardul I.C. Brătianu, cei din zonele Gara CFR și Casa de Cultură și cartierele Abator, Far și KM 4", rezultatul conține 6 obiecte: unul cu strada "I.C. Brătianu", apoi câte unul cu cartier "Gara CFR", "Casa de Cultură", "Abator", "Far", "KM 4".
 
-    Format obligatoriu:
+    Format obligatoriu (ARRAY cu un obiect per zonă afectată):
     [
       {{
         "localitate": "...",
@@ -250,11 +253,23 @@ def trimite_telegram(contact, avarie):
         print(f"⚠️ Eroare la trimiterea mesajului Telegram către {chat_id}: {e}")
 
 
+# Abonamente care au primit deja notificare pentru un comunicat sursă (în această rulare).
+# Un anunț RAJA generează mai multe avarii (una per stradă + una per cartier/zonă);
+# fără acest set, abonatul ar primi un email per zonă din același comunicat.
+notificari_pe_sursa = set()
+
+
 def notifica_abonatii(avarie_salvata):
-    """Găsește abonații interesați de această zonă și le trimite alertă (o singură dată/abonament)."""
+    """Găsește abonații interesați de această zonă și le trimite alertă (o singură dată/abonament).
+
+    Un anunț RAJA generează mai multe avarii (una per stradă + una per cartier/zonă).
+    Fără deduplicare, un abonat pe toată localitatea ar primi câte un email per zonă.
+    De aceea trimitem MAXIM o notificare per abonament pentru același comunicat (sursa_url).
+    """
     localitate_norm = normalizeaza_text(avarie_salvata["localitate"])
     strada_norm = normalizeaza_text(avarie_salvata.get("strada", ""))
     cartier_norm = normalizeaza_text(avarie_salvata.get("cartier", ""))
+    sursa_url = avarie_salvata.get("sursa_url")
 
     rezultat = supabase.table("abonamente").select("*").eq("activ", True).eq("localitate_interes", localitate_norm).execute()
     abonamente = rezultat.data or []
@@ -263,17 +278,28 @@ def notifica_abonatii(avarie_salvata):
         strada_abonament = normalizeaza_text(abonament.get("strada_interes") or "")
         cartier_abonament = normalizeaza_text(abonament.get("cartier_interes") or "")
 
-        # Dacă userul a specificat un cartier, notificăm doar dacă se potrivește
-        if cartier_abonament and cartier_abonament not in cartier_norm and cartier_norm not in cartier_abonament:
-            continue
-
-        # Dacă userul a specificat o stradă, notificăm doar dacă se potrivește cu strada SAU cartierul avariei
-        # (un abonament pe "Tomis 3" salvat ca stradă trebuie să se potrivească și cu un cartier "Tomis 3")
-        if strada_abonament:
-            potrivire_strada = strada_abonament in strada_norm or strada_norm in strada_abonament
-            potrivire_cartier = strada_abonament in cartier_norm or cartier_norm in strada_abonament
-            if not potrivire_strada and not potrivire_cartier:
+        # Potrivire stradă SAU cartier: dacă abonatul a specificat oricare dintre ele,
+        # avaria se potrivește dacă numele apare în câmpul corespunzător SAU în celălalt
+        # (acoperă rânduri vechi unde numele cartierului a rămas în câmpul "strada",
+        # ex: "tomis 3, cuza voda", și abonamente vechi pe cartier salvate ca stradă)
+        if cartier_abonament or strada_abonament:
+            potrivire = False
+            if cartier_abonament:
+                potrivire = (
+                    cartier_abonament in cartier_norm or cartier_norm in cartier_abonament
+                    or cartier_abonament in strada_norm or strada_norm in cartier_abonament
+                )
+            if strada_abonament and not potrivire:
+                potrivire = (
+                    strada_abonament in strada_norm or strada_norm in strada_abonament
+                    or strada_abonament in cartier_norm or cartier_norm in strada_abonament
+                )
+            if not potrivire:
                 continue
+
+        # O singură notificare per abonament pentru același comunicat sursă
+        if sursa_url and (abonament["id"], sursa_url) in notificari_pe_sursa:
+            continue
 
         # Verificăm dacă am trimis deja notificare pentru acest abonament + această avarie
         deja_trimis = supabase.table("notificari_trimise") \
@@ -297,6 +323,9 @@ def notifica_abonatii(avarie_salvata):
             "abonament_id": abonament["id"],
             "avarie_id": avarie_salvata["id"]
         }).execute()
+
+        if sursa_url:
+            notificari_pe_sursa.add((abonament["id"], sursa_url))
 
         # Log admin: cine a fost notificat, pentru ce zonă și pe ce canal
         canal = "Email" if tip == "email" else "Telegram" if tip == "telegram" else str(tip)
@@ -336,20 +365,24 @@ def salveaza_avarii(avarii_extrase, sursa_url, data_articol=None):
     for avarie in avarii_extrase:
         if not avarie.get("localitate"):
             continue
-        # Trebuie să existe cel puțin o stradă SAU un cartier
+        # Trebuie să existe cel puțin o stradă SAU un cartier/zonă
         if not (avarie.get("strada") or avarie.get("cartier")):
             continue
 
+        # Normalizăm: valorile lipsă devin "" (NU null) ca upsert-ul să deduplice corect
+        # (în PostgreSQL, null-urile nu intră niciodată în conflict la unice)
+        if not avarie.get("strada"):
+            avarie["strada"] = ""
+        if not avarie.get("cartier"):
+            avarie["cartier"] = ""
+
         for avarie_simpla in desparte_strazile(avarie):
-            # Dacă e doar cartier (fără stradă), păstrăm strada goală și folosim cartierul
-            if not avarie_simpla.get("strada"):
-                avarie_simpla["strada"] = ""
             zona = avarie_simpla.get("strada") or avarie_simpla.get("cartier") or "Toată localitatea"
             print(f"\n📍 Caut coordonate pentru: {avarie_simpla['localitate']}, {zona}...")
             lat, lon = obtine_coordonate(
                 avarie_simpla['localitate'],
                 avarie_simpla.get("strada", ""),
-                avarie_simpla.get("cartier")
+                avarie_simpla.get("cartier", "")
             )
             avarie_simpla['latitudine'] = lat
             avarie_simpla['longitudine'] = lon
@@ -362,7 +395,7 @@ def salveaza_avarii(avarii_extrase, sursa_url, data_articol=None):
             try:
                 rezultat = supabase.table("avarii").upsert(
                     avarie_simpla,
-                    on_conflict="sursa_url,localitate,strada,status"
+                    on_conflict="sursa_url,localitate,strada,cartier,status"
                 ).execute()
 
                 if rezultat.data:
