@@ -73,6 +73,24 @@ def este_punct_termic(cartier_curat):
     return "punct termic" in text
 
 
+def alege_cel_mai_bun_rezultat(date, prefera_clasa):
+    """Alege rezultatul cel mai potrivit din lista Nominatim.
+    Nominatim ordoneaza dupa relevanta, dar uneori pune pe primul loc un rezultat
+    inselator: o statie de autobuz in locul strazii, sau centrul poligonului
+    administrativ in locul localitatii. Preferam clasa corecta:
+    - 'highway' pentru strazi (exclude statii de autobuz, care sunt tot 'highway'
+      dar au type 'bus_stop' -> le evitam explicit)
+    - 'place' pentru localitati/cartiere (exclude 'boundary' = centrul poligonului)"""
+    if not date:
+        return None
+    for r in date:
+        if r.get("class") == prefera_clasa:
+            if prefera_clasa == "highway" and r.get("type") == "bus_stop":
+                continue  # statie de autobuz, nu strada
+            return r
+    return date[0]
+
+
 def obtine_coordonate(localitate, strada, cartier=None):
     """Transformă o adresă în coordonate GPS cu reguli de curățare a textului."""
     try:
@@ -88,8 +106,10 @@ def obtine_coordonate(localitate, strada, cartier=None):
                 return None, None
             if cartier_curat:
                 query = f"{cartier_curat}, {localitate}, Romania"
+                prefera_clasa = "place"
             else:
                 query = f"{localitate}, Romania"
+                prefera_clasa = "place"
         else:
             if "," in strada_curata:
                 strada_curata = strada_curata.split(",")[0]
@@ -98,23 +118,27 @@ def obtine_coordonate(localitate, strada, cartier=None):
             # (ex: "Verde") sunt confundate cu localitati/zone omonime (ex: satul "Movila
             # Verde") in loc de strada respectiva din Constanta.
             query = f"strada {strada_curata}, {localitate}, Romania"
+            prefera_clasa = "highway"
 
         time.sleep(1)  # Pauză obligatorie pentru Nominatim
-        url = f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1"
+        url = f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=5"
         headers = {'User-Agent': 'AquaMonitorCT-Scraper/2.0'}
 
         raspuns = requests.get(url, headers=headers, timeout=15)
 
         if raspuns.status_code == 200:
             date = raspuns.json()
-            if len(date) > 0:
-                return float(date[0]['lat']), float(date[0]['lon'])
+            ales = alege_cel_mai_bun_rezultat(date, prefera_clasa)
+            if ales:
+                return float(ales['lat']), float(ales['lon'])
             else:
                 if query != f"{localitate}, Romania":
-                    fallback_url = f"https://nominatim.openstreetmap.org/search?q={localitate}, Romania&format=json&limit=1"
+                    fallback_url = f"https://nominatim.openstreetmap.org/search?q={localitate}, Romania&format=json&limit=5"
                     rasp_fallback = requests.get(fallback_url, headers=headers, timeout=15)
-                    if rasp_fallback.status_code == 200 and len(rasp_fallback.json()) > 0:
-                        return float(rasp_fallback.json()[0]['lat']), float(rasp_fallback.json()[0]['lon'])
+                    if rasp_fallback.status_code == 200:
+                        ales_fallback = alege_cel_mai_bun_rezultat(rasp_fallback.json(), "place")
+                        if ales_fallback:
+                            return float(ales_fallback['lat']), float(ales_fallback['lon'])
 
     except Exception as e:
         print(f"⚠️ Eroare la geocoding pentru {localitate}: {e}")
