@@ -171,7 +171,7 @@ export default function MembershipForm({
                 id="strada_interes"
                 name="strada_interes"
                 type="text"
-                placeholder="Ex: Faleză Nord"
+                placeholder="Ex: Dezrobirii"
                 className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-slate-900 placeholder:text-slate-400"
                 value={form.strada_interes}
                 onChange={(e) => setForm({ ...form, strada_interes: e.target.value })}
