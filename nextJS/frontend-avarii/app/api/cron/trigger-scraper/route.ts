@@ -32,6 +32,19 @@ async function handleTrigger(request: Request) {
   const secretPrimit = secretDinHeader || secretDinQuery;
 
   if (secretPrimit !== cronSecret) {
+    // Diagnostic temporar (nu expune valorile, doar lungimi, ca sa gasim
+    // rapid cauza unei nepotriviri: spatiu/linie noua la copiere, sau
+    // variabila neactualizata inca in Vercel dupa redeploy).
+    if (url.searchParams.get("debug") === "1") {
+      return NextResponse.json(
+        {
+          error: "unauthorized",
+          lungime_primita: secretPrimit.length,
+          lungime_asteptata: cronSecret.length,
+        },
+        { status: 403 }
+      );
+    }
     return NextResponse.json({ error: "unauthorized" }, { status: 403 });
   }
 
