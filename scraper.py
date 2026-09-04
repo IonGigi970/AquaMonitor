@@ -2,7 +2,8 @@ import os
 import json
 import time
 import unicodedata
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import requests
 from dotenv import load_dotenv
@@ -17,9 +18,6 @@ supabase: Client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 model = genai.GenerativeModel('gemini-3.6-flash')
-
-# Câte zile în urmă se face scanarea (implicit 2 zile)
-ZILE_SCANARE = int(os.getenv("ZILE_SCANARE", "2"))
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "AquaMonitor CT <onboarding@resend.dev>")
@@ -58,6 +56,15 @@ def normalizeaza_text(text):
         if text.startswith(prefix):
             text = text[len(prefix):]
     return text.strip()
+
+
+def azi_bucuresti():
+    """Data curentă în fusul orar al României (Europe/Bucharest), ca obiect date.
+
+    Site-ul și notificările raportează la ziua calendaristică din România,
+    nu la UTC (GitHub Actions rulează în UTC, unde ora locală e decalată).
+    """
+    return datetime.now(ZoneInfo("Europe/Bucharest")).date()
 
 
 # Coordonate corecte pentru strazi pe care geocodarea (Nominatim/OpenStreetMap)
@@ -489,6 +496,16 @@ def salveaza_avarii(avarii_extrase, sursa_url, data_articol=None):
 
         for avarie_simpla in desparte_strazile(avarie):
             zona = avarie_simpla.get("strada") or avarie_simpla.get("cartier") or "Toată localitatea"
+
+            # Protecție: avariile cu dată explicită în trecut nu se salvează și nu se
+            # notifică (ex: articol de ieri procesat târziu). Site-ul afișează doar
+            # avariile zilei curente; datele din trecut doar ar umple baza de date.
+            data_avarie = (avarie_simpla.get("data") or "").strip()
+            if data_avarie and data_avarie < azi_bucuresti().isoformat():
+                print(f"⏭️  Avarie cu dată trecută ({data_avarie}), se omite: "
+                      f"{avarie_simpla['localitate']} - {zona}")
+                continue
+
             print(f"\n📍 Caut coordonate pentru: {avarie_simpla['localitate']}, {zona}...")
             lat, lon = obtine_coordonate(
                 avarie_simpla['localitate'],
@@ -517,32 +534,26 @@ def salveaza_avarii(avarii_extrase, sursa_url, data_articol=None):
 
 
 def curata_avarii_vechi():
-    """Șterge avariile a căror dată a trecut de mai mult de o zi (data < ieri).
+    """Șterge din baza de date avariile mai vechi de 2 zile.
 
-    RAJA anunță avarii care încep într-o zi și continuă în următoarea. Păstrăm
-    avariile de ieri, azi și din viitor, ca să nu dispară înainte de finalizare.
+    Afișarea pe site arată doar avariile zilei curente, dar rândurile din baza de
+    date se păstrează 2 zile și se șterg abia după ce au trecut mai mult de 2 zile
+    de la data avariei (prag = azi - 2 zile).
     """
-    azi = datetime.now(timezone.utc).date()
-    ieri = (azi - timedelta(days=1)).isoformat()
-    azi_str = azi.isoformat()
+    azi = azi_bucuresti()
+    prag = (azi - timedelta(days=2)).isoformat()
     try:
-        # 1. Avarii cu dată explicită mai veche de ieri
-        rezultat = supabase.table("avarii").delete().lt("data", ieri).execute()
+        # 1. Avarii cu dată explicită mai veche de 2 zile
+        rezultat = supabase.table("avarii").delete().lt("data", prag).execute()
         nr = len(rezultat.data or [])
         if nr:
-            print(f"🗑️  Am șters {nr} avarii vechi (data < {ieri}).")
+            print(f"🗑️  Am șters {nr} avarii mai vechi de 2 zile (data < {prag}).")
 
-        # 2. Avarii fără dată, adăugate înainte de ieri (rânduri vechi rămase)
-        rezultat2 = supabase.table("avarii").delete().is_("data", "null").lt("data_adaugarii", ieri).execute()
+        # 2. Avarii fără dată, adăugate în urmă cu mai mult de 2 zile
+        rezultat2 = supabase.table("avarii").delete().is_("data", "null").lt("data_adaugarii", prag).execute()
         nr2 = len(rezultat2.data or [])
         if nr2:
-            print(f"🗑️  Am șters {nr2} avarii vechi fără dată (adăugate înainte de ieri).")
-
-        # 3. Avarii marcate REMEDIAT, adăugate înainte de azi (nu mai sunt active)
-        rezultat3 = supabase.table("avarii").delete().eq("status", "REMEDIAT").lt("data_adaugarii", azi_str).execute()
-        nr3 = len(rezultat3.data or [])
-        if nr3:
-            print(f"🗑️  Am șters {nr3} avarii remediate (nu mai sunt active).")
+            print(f"🗑️  Am șters {nr2} avarii vechi fără dată (adăugate înainte de {prag}).")
     except Exception as e:
         print(f"⚠️ Eroare la curățarea avariilor vechi: {e}")
 
@@ -561,7 +572,10 @@ def preia_articole_avarii():
     soup = BeautifulSoup(raspuns.text, 'html.parser')
     articole = soup.find_all('article')
 
-    limita_veche = datetime.now(timezone.utc) - timedelta(days=ZILE_SCANARE)
+    # Preluăm DOAR articolele publicate azi (fusul orar al României).
+    # Altfel, după o pauză a scraper-ului, am notifica abonații cu avarii vechi
+    # (de ieri sau mai vechi), care nu mai sunt relevante pentru "azi".
+    start_azi = datetime.combine(azi_bucuresti(), datetime.min.time(), tzinfo=ZoneInfo("Europe/Bucharest"))
     articole_valabile = []
 
     for articol in articole:
@@ -572,9 +586,12 @@ def preia_articole_avarii():
 
         post_url = link_tag.get('href')
         data_postare = datetime.fromisoformat(time_tag['datetime'])
+        if data_postare.tzinfo is None:
+            # Dacă site-ul nu specifică fusul orar, presupunem ora României
+            data_postare = data_postare.replace(tzinfo=ZoneInfo("Europe/Bucharest"))
 
-        if data_postare < limita_veche:
-            continue  # articol prea vechi, îl ignorăm
+        if data_postare < start_azi:
+            continue  # articol de ieri sau mai vechi, îl ignorăm
 
         paragrafe = articol.find_all('p')
         text_brut = " \n".join(p.get_text(strip=True) for p in paragrafe if len(p.get_text(strip=True)) > 40)
@@ -582,7 +599,7 @@ def preia_articole_avarii():
         if text_brut:
             articole_valabile.append({"url": post_url, "text": text_brut[:3000], "data": data_postare})
 
-    print(f"🔎 {len(articole_valabile)} articole din ultimele {ZILE_SCANARE} zile găsite pe pagină.")
+    print(f"🔎 {len(articole_valabile)} articole publicate azi găsite pe pagină.")
     return articole_valabile
 
 

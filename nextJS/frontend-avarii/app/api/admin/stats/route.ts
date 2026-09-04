@@ -27,10 +27,14 @@ export async function GET(request: Request) {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const azi = new Date();
-    const ieri = new Date(azi);
-    ieri.setDate(ieri.getDate() - 1);
-    const ieriStr = ieri.toISOString().slice(0, 10);
+    // "Avarii active" = avariile zilei curente (fusul orar al României),
+    // aceleași ca cele afișate pe site.
+    const aziStr = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Bucharest",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
 
     const [
       avariiActive,
@@ -42,7 +46,7 @@ export async function GET(request: Request) {
       notificariTrimise,
       utilizatori,
     ] = await Promise.all([
-      supabase.from('avarii').select('id', { count: 'exact', head: true }).gte('data', ieriStr).neq('status', 'REMEDIAT'),
+      supabase.from('avarii').select('id', { count: 'exact', head: true }).eq('data', aziStr).neq('status', 'REMEDIAT'),
       supabase.from('avarii').select('id', { count: 'exact', head: true }),
       supabase.from('abonamente').select('id', { count: 'exact', head: true }).eq('activ', true),
       supabase.from('abonamente').select('id', { count: 'exact', head: true }).eq('activ', true).eq('tip_contact', 'email'),
@@ -65,7 +69,7 @@ export async function GET(request: Request) {
     const { data: avariiPeStatus } = await supabase
       .from('avarii')
       .select('status')
-      .gte('data', ieriStr)
+      .eq('data', aziStr)
       .neq('status', 'REMEDIAT');
     const distributieStatus: Record<string, number> = {};
     (avariiPeStatus ?? []).forEach((a: { status: string }) => {
@@ -76,7 +80,7 @@ export async function GET(request: Request) {
     const { data: avariiPeLocalitate } = await supabase
       .from('avarii')
       .select('localitate')
-      .gte('data', ieriStr)
+      .eq('data', aziStr)
       .neq('status', 'REMEDIAT');
     const distributieLocalitate: Record<string, number> = {};
     (avariiPeLocalitate ?? []).forEach((a: { localitate: string }) => {
