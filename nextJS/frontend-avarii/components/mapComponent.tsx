@@ -18,6 +18,7 @@ interface Avarie {
   data_sfarsit?: string;
   data?: string | null;
   sursa_url?: string | null;
+  tip_intrerupere?: string | null;
   latitudine?: number;
   longitudine?: number;
 }
@@ -37,10 +38,12 @@ function creeazaIcon(culoare: string) {
 const iconAvarie = creeazaIcon('red');
 const iconPresiune = creeazaIcon('orange');
 const iconRemediat = creeazaIcon('green');
+const iconProgramat = creeazaIcon('orange');
 
-function iconPentruStatus(status: string) {
-  if (status === 'AVARIE') return iconAvarie;
-  if (status === 'REMEDIAT') return iconRemediat;
+function iconPentruStatus(avarie: Avarie) {
+  if (avarie.status === 'REMEDIAT') return iconRemediat;
+  if (avarie.tip_intrerupere === 'programata') return iconProgramat;
+  if (avarie.status === 'AVARIE') return iconAvarie;
   return iconPresiune;
 }
 
@@ -94,7 +97,7 @@ export default function MapComponent({ avarii }: { avarii: Avarie[] }) {
             <Marker 
               key={avarie.id || `marker-${index}`} 
               position={[avarie.latitudine, avarie.longitudine]}
-              icon={iconPentruStatus(avarie.status)}
+              icon={iconPentruStatus(avarie)}
             >
               <Popup>
                 <div className="font-sans">
@@ -108,7 +111,7 @@ export default function MapComponent({ avarii }: { avarii: Avarie[] }) {
                     </>
                   )}
                   <span className={`text-xs font-bold ${avarie.status === 'AVARIE' ? 'text-red-500' : 'text-amber-600'}`}>
-                    {avarie.status}
+                    {avarie.tip_intrerupere === 'programata' ? '📅 Programată' : avarie.status}
                   </span>
                   {avarie.data_inceput && (
                     <>
@@ -116,7 +119,7 @@ export default function MapComponent({ avarii }: { avarii: Avarie[] }) {
                       <span className="text-xs">{avarie.data_inceput} - {avarie.data_sfarsit}</span>
                     </>
                   )}
-                  {avarie.sursa_url && (
+                  {avarie.sursa_url && avarie.sursa_url.startsWith('http') && (
                     <>
                       <br/>
                       <a

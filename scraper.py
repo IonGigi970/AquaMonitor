@@ -322,6 +322,8 @@ def trimite_email(destinatar, avarie):
     data = avarie.get("data") or ""
     serviciu = avarie.get("serviciu") or "apa"
     eticheta = ETICHETE_SERVICIU.get(serviciu, serviciu)
+    tip = avarie.get("tip_intrerupere")
+    eticheta_tip = "📅 Deconectare programată" if tip == "programata" else "⚡ Întrerupere accidentală"
     data_inceput = avarie.get('data_inceput') or ""
     data_sfarsit = avarie.get('data_sfarsit') or ""
     interval = (f"{data_inceput} - {data_sfarsit}").strip(" -") or ""
@@ -330,6 +332,7 @@ def trimite_email(destinatar, avarie):
         f"<p><b>📍 Locație: {avarie['localitate']}, {avarie['strada']}</b></p>"
         f"<p><b>Status: {avarie['status']}</b></p>"
         f"<p><b>⚡ Serviciu: {eticheta}</b></p>"
+        + (f"<p><b>Tip: {eticheta_tip}</b></p>" if tip else "")
         + (f"<p>Interval: {interval}</p>" if interval else "")
         + f"<p>{avarie.get('descriere_text', '')}</p>"
         f"<p style='color:#888;font-size:12px'>AquaMonitor CT — te-ai abonat pentru alerte pe zona ta.</p>"
@@ -428,6 +431,8 @@ def trimite_telegram(contact, avarie):
         data = avarie.get("data") or "?"
         serviciu = avarie.get("serviciu") or "apa"
         eticheta = ETICHETE_SERVICIU.get(serviciu, serviciu)
+        tip = avarie.get("tip_intrerupere")
+        eticheta_tip = "📅 Deconectare programată" if tip == "programata" else "⚡ Întrerupere accidentală"
         zona = avarie['strada'] or avarie.get('cartier') or "Toată localitatea"
         data_inceput = avarie.get('data_inceput') or ""
         data_sfarsit = avarie.get('data_sfarsit') or ""
@@ -437,7 +442,8 @@ def trimite_telegram(contact, avarie):
             f"*📅 Data: {data}*\n"
             f"*📍 Locație: {avarie['localitate']}, {zona}*\n"
             f"*Status: {avarie['status']}*\n"
-            f"Interval: {interval}\n"
+            + (f"*Tip: {eticheta_tip}*\n" if tip else "")
+            + f"Interval: {interval}\n"
             f"{avarie.get('descriere_text', '')}"
         )
         raspuns = requests.post(
@@ -747,7 +753,7 @@ def reincearca_notificari_esuate():
     din notificari_pe_sursa garantează că nimeni nu primește de două ori aceeași
     alertă."""
     azi_str = azi_bucuresti().isoformat()
-    selecteaza = "id,serviciu,localitate,strada,cartier,status,descriere_text,data_inceput,data_sfarsit,data,sursa_url"
+    selecteaza = "id,serviciu,localitate,strada,cartier,status,descriere_text,data_inceput,data_sfarsit,data,sursa_url,tip_intrerupere"
     avarii_de_reluat = []
     try:
         # Avarii apă publicate azi
@@ -826,29 +832,40 @@ def mapeaza_zona_intrerupere(desc_norm, localitati):
     return "constanta", desc_norm
 
 
-def descriere_intrerupere(attr, desc_raw):
-    """Text descriptiv dintr-un rând ArcGIS (fără date personale)."""
-    text = (f"Întrerupere neplanificată de energie electrică (avarie în rețea), "
-            f"anunțată în zona: {desc_raw}.")
+def descriere_intrerupere(attr, desc_raw, tip):
+    """Text descriptiv dintr-un rând ArcGIS (fără date personale).
+
+    tip: "accidentala" (avarie în rețea) sau "programata" (deconectare planificată).
+    """
+    if tip == "programata":
+        text = (f"Deconectare programată de energie electrică (lucrări în rețea), "
+                f"anunțată în zona: {desc_raw}.")
+    else:
+        text = (f"Întrerupere neplanificată de energie electrică (avarie în rețea), "
+                f"anunțată în zona: {desc_raw}.")
     clienti = attr.get("num_cli_di")
     if clienti:
         text += f" Clienți afectați: {clienti}."
     estimare = (attr.get("data_prev_") or "").strip()
     if estimare and "definire" not in estimare.lower():
-        text += f" Estimare remediere: {estimare}."
+        if tip == "programata":
+            text += f" Sfârșit estimat: {estimare}."
+        else:
+            text += f" Estimare remediere: {estimare}."
     return text
 
 
 def sincronizeaza_intreruperi_curent():
-    """Sincronizează întreruperile neplanificate de curent din județul Constanța.
+    """Sincronizează întreruperile de energie electrică din județul Constanța.
 
-    API-ul listează doar întreruperile încă active. Cele noi se inserează și
-    declanșează notificări; cele care dispar din feed se marchează REZOLVATE
-    (rămân vizibile în istoricul scurt, apoi sunt șterse după 2 zile)."""
-    print("⚡ Verific întreruperile neplanificate de curent (Rețele Electrice)...")
+    API-ul listează întreruperile încă active, atât accidentale (causa_disa='Accidental')
+    cât și planificate (causa_disa='Planificat'). Cele noi se inserează și declanșează
+    notificări; cele care dispar din feed se marchează REZOLVATE (rămân vizibile în
+    istoricul scurt, apoi sunt șterse după 2 zile)."""
+    print("⚡ Verific întreruperile de energie electrică (Rețele Electrice)...")
     try:
         raspuns = requests.get(ARCGIS_INTRERUPERI_URL, params={
-            "where": "provincia='CONSTANTA' AND causa_disa='Accidental'",
+            "where": "provincia='CONSTANTA'",
             "outFields": "*", "f": "json", "resultRecordCount": "2000",
         }, headers={"User-Agent": "Mozilla/5.0"}, timeout=25)
         if raspuns.status_code != 200:
@@ -856,7 +873,7 @@ def sincronizeaza_intreruperi_curent():
             return
         features = raspuns.json().get("features", [])
     except Exception as e:
-        print(f"⚠️ Eroare la interogarea API-ului de curent: {e}")
+        print(f"⚠️ Eroare la interogarea API-ului de energie electrică: {e}")
         return
 
     localitati = _localitati_recunoscute_curent()
@@ -868,9 +885,12 @@ def sincronizeaza_intreruperi_curent():
         if not cod:
             continue
         coduri_active.add(cod)
+        causa = (attr.get("causa_disa") or "").strip().lower()
+        tip = "programata" if causa == "planificat" else "accidentala"
         desc_raw = (attr.get("descrizion") or "").strip()
         localitate, cartier = mapeaza_zona_intrerupere(normalizeaza_text(desc_raw), localitati)
         data_inceput = (attr.get("data_inter") or "").strip()
+        data_sfarsit = (attr.get("data_prev_") or "").strip()
         data_zi = None
         try:
             data_zi = datetime.strptime(data_inceput, "%d/%m/%Y %H:%M").date().isoformat()
@@ -878,18 +898,20 @@ def sincronizeaza_intreruperi_curent():
             pass
         intrari.append({
             "cod": cod,
+            "tip": tip,
             "localitate": localitate,
             "cartier": cartier,
-            "descriere": descriere_intrerupere(attr, desc_raw),
+            "descriere": descriere_intrerupere(attr, desc_raw, tip),
             "data": data_zi,
             "data_inceput": data_inceput,
+            "data_sfarsit": data_sfarsit,
             "lat": attr.get("latitudine"),
             "lon": attr.get("longitudin"),
         })
 
     existente = {}
     try:
-        rez = supabase.table("avarii").select("id,sursa_url,status").eq("serviciu", "curent").execute()
+        rez = supabase.table("avarii").select("id,sursa_url,status,tip_intrerupere").eq("serviciu", "curent").execute()
         for r in rez.data or []:
             if (r.get("sursa_url") or "").startswith("retele:"):
                 existente[r["sursa_url"][7:]] = r
@@ -904,26 +926,31 @@ def sincronizeaza_intreruperi_curent():
                 # Deja activă în baza noastră: actualizăm datele curente
                 supabase.table("avarii").update({
                     "latitudine": e["lat"], "longitudine": e["lon"],
-                    "data_inceput": e["data_inceput"], "descriere_text": e["descriere"],
+                    "data_inceput": e["data_inceput"], "data_sfarsit": e["data_sfarsit"],
+                    "descriere_text": e["descriere"], "tip_intrerupere": e["tip"],
                 }).eq("id", rand["id"]).execute()
             elif rand:
                 # A reapărut după rezolvare: o reactivăm
                 supabase.table("avarii").update({
-                    "status": "AVARIE", "data_sfarsit": "",
+                    "status": "AVARIE", "data_sfarsit": e["data_sfarsit"],
                     "latitudine": e["lat"], "longitudine": e["lon"],
                     "data_inceput": e["data_inceput"], "descriere_text": e["descriere"],
+                    "tip_intrerupere": e["tip"],
                 }).eq("id", rand["id"]).execute()
                 print(f"⚡ Reapariție întrerupere {e['cod']} ({e['localitate']} {e['cartier']}).")
             else:
                 inserat = supabase.table("avarii").insert({
                     "serviciu": "curent", "status": "AVARIE",
                     "localitate": e["localitate"], "strada": "", "cartier": e["cartier"],
-                    "data": e["data"], "data_inceput": e["data_inceput"], "data_sfarsit": "",
-                    "descriere_text": e["descriere"],
+                    "data": e["data"], "data_inceput": e["data_inceput"],
+                    "data_sfarsit": e["data_sfarsit"],
+                    "descriere_text": e["descriere"], "tip_intrerupere": e["tip"],
                     "latitudine": e["lat"], "longitudine": e["lon"],
                     "sursa_url": f"retele:{e['cod']}",
                 }).execute()
-                print(f"⚡ Întrerupere NOUĂ de curent: {e['localitate']} {e['cartier']} ({e['cod']}).")
+                eticheta_tip = "programată" if e["tip"] == "programata" else "accidentală"
+                print(f"⚡ Întrerupere NOUĂ de energie electrică ({eticheta_tip}): "
+                      f"{e['localitate']} {e['cartier']} ({e['cod']}).")
                 if inserat.data:
                     notifica_abonatii(inserat.data[0])
         except Exception as ex:
@@ -942,7 +969,7 @@ def sincronizeaza_intreruperi_curent():
             except Exception as ex:
                 print(f"❌ Eroare la marcarea rezolvare {cod}: {ex}")
     if nr_rezolvate:
-        print(f"✅ {nr_rezolvate} întreruperi de curent rezolvate.")
+        print(f"✅ {nr_rezolvate} întreruperi de energie electrică rezolvate.")
 
 
 def ruleaza_scanare():

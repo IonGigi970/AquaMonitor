@@ -21,12 +21,59 @@ interface Intrerupere {
   data_inceput?: string;
   data_sfarsit?: string;
   sursa_url?: string | null;
+  tip_intrerupere?: string | null;
   latitudine?: number;
   longitudine?: number;
 }
 
-function esteActiva(a: Intrerupere): boolean {
-  return a.status !== 'REMEDIAT';
+function esteRezolvata(a: Intrerupere): boolean {
+  return a.status === 'REMEDIAT';
+}
+
+function esteProgramata(a: Intrerupere): boolean {
+  return a.tip_intrerupere === 'programata';
+}
+
+function CardIntrerupere({ item }: { item: Intrerupere }) {
+  const programata = esteProgramata(item);
+  const rezolvata = esteRezolvata(item);
+
+  const culoareBord = rezolvata ? 'border-emerald-500' : programata ? 'border-amber-500' : 'border-red-500';
+  const culoareBadge = rezolvata ? 'bg-emerald-100 text-emerald-700' : programata ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600';
+  const textBadge = rezolvata ? '✅ Rezolvat' : programata ? '📅 Programată' : '⚡ Întrerupere';
+
+  return (
+    <div className={`block bg-white p-5 rounded-2xl shadow-sm border-l-4 hover:shadow-md transition-shadow relative overflow-hidden ${culoareBord}`}>
+      <div className={`absolute top-0 right-0 text-xs font-bold px-3 py-1 rounded-bl-lg ${culoareBadge}`}>
+        {textBadge}
+      </div>
+      <h3 className="font-bold text-lg text-slate-800 mt-2">
+        {programata ? '📅' : '⚡'} {formateazaText(item.localitate)}
+      </h3>
+      <p className="text-sm font-semibold text-slate-700 mt-1">
+        {item.cartier ? formateazaText(item.cartier) : "Zonă nespecificată"}
+      </p>
+
+      {item.data_inceput && (
+        <div className="flex items-center gap-2 text-xs font-bold text-amber-700 mt-3 bg-amber-50 p-2 rounded-lg">
+          {programata ? '🕒 Începe:' : '⏱️ Începută:'} {item.data_inceput}
+        </div>
+      )}
+
+      {item.data_sfarsit && (
+        <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 mt-3 bg-emerald-50 p-2 rounded-lg">
+          {programata ? '🏁 Sfârșit estimat:' : '✅ Rezolvată:'} {item.data_sfarsit}
+        </div>
+      )}
+
+      {!item.data_inceput && item.data && (
+        <div className="flex items-center gap-2 text-xs font-bold text-blue-700 mt-3 bg-blue-50 p-2 rounded-lg">
+          📅 {formateazaData(item.data)}
+        </div>
+      )}
+      <p className="text-xs text-slate-600 mt-3 leading-relaxed">{item.descriere_text}</p>
+    </div>
+  );
 }
 
 export default function CurentPage() {
@@ -35,7 +82,10 @@ export default function CurentPage() {
   const [eroareFetch, setEroareFetch] = useState("");
   const [arataToate, setArataToate] = useState(false);
 
-  const alerteVizibile = arataToate ? intreruperi : intreruperi.slice(0, 5);
+  const programate = intreruperi.filter((i) => esteProgramata(i) && !esteRezolvata(i));
+  const accidentale = intreruperi.filter((i) => !esteProgramata(i) && !esteRezolvata(i));
+  const rezolvate = intreruperi.filter((i) => esteRezolvata(i));
+  const rezolvateVizibile = arataToate ? rezolvate : rezolvate.slice(0, 5);
 
   useEffect(() => {
     async function fetchIntreruperi() {
@@ -95,7 +145,7 @@ export default function CurentPage() {
         <div className="max-w-7xl mx-auto px-4 py-3 text-sm md:text-base font-bold flex items-start gap-3">
           <span className="shrink-0">⚠️</span>
           <span>
-            Modulul „Energie electrică” este în dezvoltare: informațiile afișate pot fi
+            Modulul „Energie electrică" este în dezvoltare: informațiile afișate pot fi
             incomplete sau întârziate. Extindem treptat AquaMonitor CT de la avariile de apă
             (RAJA) la întreruperile de energie electrică.
           </span>
@@ -113,52 +163,58 @@ export default function CurentPage() {
               ) : eroareFetch ? (
                 <p className="text-red-600 text-sm bg-red-50 p-3 rounded-xl">Eroare la încărcare: {eroareFetch}</p>
               ) : intreruperi.length === 0 ? (
-                <p className="text-slate-500">Nu există întreruperi neplanificate în curs.</p>
+                <p className="text-slate-500">Nu există întreruperi în curs sau programate.</p>
               ) : (
                 <>
-                  {alerteVizibile.map((item, index) => (
-                    <div
-                      key={item.id || index}
-                      className={`block bg-white p-5 rounded-2xl shadow-sm border-l-4 hover:shadow-md transition-shadow relative overflow-hidden ${esteActiva(item) ? 'border-red-500' : 'border-emerald-500'}`}
-                    >
-                        <div className={`absolute top-0 right-0 text-xs font-bold px-3 py-1 rounded-bl-lg ${esteActiva(item) ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
-                          {esteActiva(item) ? '⚡ Întrerupere' : '✅ Rezolvat'}
-                        </div>
-                        <h3 className="font-bold text-lg text-slate-800 mt-2">
-                          ⚡ {formateazaText(item.localitate)}
-                        </h3>
-                        <p className="text-sm font-semibold text-slate-700 mt-1">
-                          {item.cartier ? formateazaText(item.cartier) : "Zonă nespecificată"}
-                        </p>
-
-                        {item.data_inceput && (
-                          <div className="flex items-center gap-2 text-xs font-bold text-amber-700 mt-3 bg-amber-50 p-2 rounded-lg">
-                            ⏱️ Începută: {item.data_inceput}
-                          </div>
-                        )}
-
-                        {item.data_sfarsit && (
-                          <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 mt-3 bg-emerald-50 p-2 rounded-lg">
-                            ✅ Rezolvată: {item.data_sfarsit}
-                          </div>
-                        )}
-
-                        {!item.data_inceput && item.data && (
-                          <div className="flex items-center gap-2 text-xs font-bold text-blue-700 mt-3 bg-blue-50 p-2 rounded-lg">
-                            📅 {formateazaData(item.data)}
-                          </div>
-                        )}
-                        <p className="text-xs text-slate-600 mt-3 leading-relaxed">{item.descriere_text}</p>
+                  {programate.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-bold uppercase tracking-wide text-amber-700 mb-2 flex items-center gap-2">
+                        📅 Deconectări programate
+                      </h3>
+                      <div className="space-y-4">
+                        {programate.map((item, index) => (
+                          <CardIntrerupere key={item.id || `p-${index}`} item={item} />
+                        ))}
+                      </div>
                     </div>
-                  ))}
+                  )}
 
-                  {intreruperi.length > 5 && (
-                    <button
-                      onClick={() => setArataToate((v) => !v)}
-                      className="w-full bg-amber-600 text-white font-semibold py-3 rounded-xl hover:bg-amber-700 transition-colors"
-                    >
-                      {arataToate ? "Arată mai puține" : `Arată mai multe (${intreruperi.length - 5})`}
-                    </button>
+                  {accidentale.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-bold uppercase tracking-wide text-red-600 mb-2 flex items-center gap-2">
+                        ⚡ Întreruperi accidentale
+                      </h3>
+                      <div className="space-y-4">
+                        {accidentale.map((item, index) => (
+                          <CardIntrerupere key={item.id || `a-${index}`} item={item} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {programate.length === 0 && accidentale.length === 0 && (
+                    <p className="text-slate-500">Nu există întreruperi în curs sau programate.</p>
+                  )}
+
+                  {rezolvate.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-bold uppercase tracking-wide text-emerald-600 mb-2 flex items-center gap-2">
+                        ✅ Rezolvate recent
+                      </h3>
+                      <div className="space-y-4">
+                        {rezolvateVizibile.map((item, index) => (
+                          <CardIntrerupere key={item.id || `r-${index}`} item={item} />
+                        ))}
+                      </div>
+                      {rezolvate.length > 5 && (
+                        <button
+                          onClick={() => setArataToate((v) => !v)}
+                          className="w-full bg-amber-600 text-white font-semibold py-3 rounded-xl hover:bg-amber-700 transition-colors mt-3"
+                        >
+                          {arataToate ? "Arată mai puține" : `Arată mai multe (${rezolvate.length - 5})`}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </>
               )}
@@ -180,7 +236,7 @@ export default function CurentPage() {
           <div className="flex flex-col items-center">
             <h3 className="font-bold text-lg mb-2">⚡ AquaMonitor CT — Energie electrică</h3>
             <p className="text-sm text-amber-100 max-w-xs">
-              Monitorizăm întreruperile neplanificate de energie electrică din județul Constanța,
+              Monitorizăm întreruperile de energie electrică din județul Constanța,
               anunțate de Rețele Electrice, în timp real.
             </p>
           </div>
