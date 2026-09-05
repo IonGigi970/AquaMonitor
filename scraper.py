@@ -31,6 +31,13 @@ GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "aquamonitorct@gmail.com")
 
+# Etichete afișate în notificări, per serviciu
+ETICHETE_SERVICIU = {
+    "apa": "apă",
+    "curent": "curent electric",
+}
+
+
 
 def trimite_email_gmail(destinatar, subiect, html):
     """Trimite un email prin Gmail SMTP (varianta gratuita, fara domeniu propriu).
@@ -313,16 +320,21 @@ def trimite_email(destinatar, avarie):
     La eșec, notificarea NU se marchează ca trimisă, deci scraper-ul o va
     reîncerca la următoarea rulare."""
     data = avarie.get("data") or ""
-    interval = f"{avarie.get('data_inceput', '?')} - {avarie.get('data_sfarsit', '?')}"
+    serviciu = avarie.get("serviciu") or "apa"
+    eticheta = ETICHETE_SERVICIU.get(serviciu, serviciu)
+    data_inceput = avarie.get('data_inceput') or ""
+    data_sfarsit = avarie.get('data_sfarsit') or ""
+    interval = (f"{data_inceput} - {data_sfarsit}").strip(" -") or ""
     html = (
         f"<p><b>📅 Data: {data}</b></p>"
         f"<p><b>📍 Locație: {avarie['localitate']}, {avarie['strada']}</b></p>"
         f"<p><b>Status: {avarie['status']}</b></p>"
-        f"<p>Interval: {interval}</p>"
-        f"<p>{avarie.get('descriere_text', '')}</p>"
+        f"<p><b>⚡ Serviciu: {eticheta}</b></p>"
+        + (f"<p>Interval: {interval}</p>" if interval else "")
+        + f"<p>{avarie.get('descriere_text', '')}</p>"
         f"<p style='color:#888;font-size:12px'>AquaMonitor CT — te-ai abonat pentru alerte pe zona ta.</p>"
     )
-    subiect = f"🚨 Alertă apă: {avarie['localitate']} - {avarie['status']}"
+    subiect = f"🚨 Alertă {eticheta}: {avarie['localitate']} - {avarie['status']}"
 
     if GMAIL_USER and GMAIL_APP_PASSWORD:
         return trimite_email_gmail(destinatar, subiect, html)
@@ -414,12 +426,18 @@ def trimite_telegram(contact, avarie):
         return False
     try:
         data = avarie.get("data") or "?"
+        serviciu = avarie.get("serviciu") or "apa"
+        eticheta = ETICHETE_SERVICIU.get(serviciu, serviciu)
+        zona = avarie['strada'] or avarie.get('cartier') or "Toată localitatea"
+        data_inceput = avarie.get('data_inceput') or ""
+        data_sfarsit = avarie.get('data_sfarsit') or ""
+        interval = (f"{data_inceput} - {data_sfarsit}").strip(" -")
         mesaj = (
-            f"🚨 *Alertă apă*\n"
+            f"🚨 *Alertă {eticheta}*\n"
             f"*📅 Data: {data}*\n"
-            f"*📍 Locație: {avarie['localitate']}, {avarie['strada']}*\n"
+            f"*📍 Locație: {avarie['localitate']}, {zona}*\n"
             f"*Status: {avarie['status']}*\n"
-            f"Interval: {avarie.get('data_inceput', '?')} - {avarie.get('data_sfarsit', '?')}\n"
+            f"Interval: {interval}\n"
             f"{avarie.get('descriere_text', '')}"
         )
         raspuns = requests.post(
@@ -497,7 +515,11 @@ def notifica_abonatii(avarie_salvata):
     cartier_norm = normalizeaza_text(avarie_salvata.get("cartier", ""))
     sursa_url = avarie_salvata.get("sursa_url")
 
-    rezultat = supabase.table("abonamente").select("*").eq("activ", True).eq("localitate_interes", localitate_norm).execute()
+    serviciu = avarie_salvata.get("serviciu") or "apa"
+    rezultat = supabase.table("abonamente").select("*") \
+        .eq("activ", True) \
+        .eq("serviciu", serviciu) \
+        .eq("localitate_interes", localitate_norm).execute()
     abonamente = rezultat.data or []
 
     for abonament in abonamente:
@@ -635,21 +657,28 @@ def salveaza_avarii(avarii_extrase, sursa_url, data_articol=None):
 def curata_avarii_vechi():
     """Șterge din baza de date avariile mai vechi de 2 zile.
 
-    Afișarea pe site arată doar avariile zilei curente, dar rândurile din baza de
-    date se păstrează 2 zile și se șterg abia după ce au trecut mai mult de 2 zile
-    de la data avariei (prag = azi - 2 zile).
+    Reguli per serviciu:
+    - apă: rândurile cu data mai veche de 2 zile se șterg (site-ul arată doar azi).
+    - curent: se șterg DOAR cele REZOLVATE (REMEDIAT) mai vechi de 2 zile;
+      întreruperile încă active se păstrează oricât de vechi (pot dura zile).
     """
     azi = azi_bucuresti()
     prag = (azi - timedelta(days=2)).isoformat()
     try:
-        # 1. Avarii cu dată explicită mai veche de 2 zile
-        rezultat = supabase.table("avarii").delete().lt("data", prag).execute()
+        # 1. Avarii apă cu dată explicită mai veche de 2 zile
+        rezultat = supabase.table("avarii").delete().eq("serviciu", "apa").lt("data", prag).execute()
         nr = len(rezultat.data or [])
         if nr:
-            print(f"🗑️  Am șters {nr} avarii mai vechi de 2 zile (data < {prag}).")
+            print(f"🗑️  Am șters {nr} avarii de apă mai vechi de 2 zile (data < {prag}).")
 
-        # 2. Avarii fără dată, adăugate în urmă cu mai mult de 2 zile
-        rezultat2 = supabase.table("avarii").delete().is_("data", "null").lt("data_adaugarii", prag).execute()
+        # 2. Întreruperi de curent rezolvate, mai vechi de 2 zile (cele active rămân)
+        rezultat_c = supabase.table("avarii").delete().eq("serviciu", "curent").eq("status", "REMEDIAT").lt("data", prag).execute()
+        nr_c = len(rezultat_c.data or [])
+        if nr_c:
+            print(f"🗑️  Am șters {nr_c} întreruperi de curent rezolvate și vechi.")
+
+        # 3. Avarii apă fără dată, adăugate în urmă cu mai mult de 2 zile
+        rezultat2 = supabase.table("avarii").delete().eq("serviciu", "apa").is_("data", "null").lt("data_adaugarii", prag).execute()
         nr2 = len(rezultat2.data or [])
         if nr2:
             print(f"🗑️  Am șters {nr2} avarii vechi fără dată (adăugate înainte de {prag}).")
@@ -708,34 +737,217 @@ def articol_deja_procesat(post_url):
 
 
 def reincearca_notificari_esuate():
-    """Reîncearcă notificările pentru avariile de azi care nu au ajuns la toți abonații.
+    """Reîncearcă notificările care nu au ajuns la toți abonații.
 
     Când o trimitere eșuează (email refuzat, bot indisponibil), notificarea nu se
     marchează ca trimisă. La rulările următoare articolul e deja procesat și nu mai
     trece prin notifica_abonatii — fără această fază, notificarea eșuată s-ar pierde
-    definitiv. Aici reluăm notificarea pentru toate avariile de azi; deduplicarea
-    din notificari_trimise (abonament+avarie) și din notificari_pe_sursa garantează
-    că nimeni nu primește de două ori aceeași alertă."""
+    definitiv. Reluăm notificarea pentru avariile de apă de azi + întreruperile de
+    curent încă active; deduplicarea din notificari_trimise (abonament+avarie) și
+    din notificari_pe_sursa garantează că nimeni nu primește de două ori aceeași
+    alertă."""
     azi_str = azi_bucuresti().isoformat()
+    selecteaza = "id,serviciu,localitate,strada,cartier,status,descriere_text,data_inceput,data_sfarsit,data,sursa_url"
+    avarii_de_reluat = []
     try:
-        rezultat = supabase.table("avarii") \
-            .select("id,localitate,strada,cartier,status,descriere_text,data_inceput,data_sfarsit,data,sursa_url") \
-            .eq("data", azi_str) \
-            .execute()
+        # Avarii apă publicate azi
+        rezultat = supabase.table("avarii").select(selecteaza).eq("serviciu", "apa").eq("data", azi_str).execute()
+        avarii_de_reluat.extend(rezultat.data or [])
+        # Întreruperi de curent încă active (indiferent de ziua începerii)
+        rezultat_c = supabase.table("avarii").select(selecteaza).eq("serviciu", "curent").neq("status", "REMEDIAT").execute()
+        avarii_de_reluat.extend(rezultat_c.data or [])
     except Exception as e:
         print(f"⚠️ Eroare la preluarea avariilor pentru reîncercare: {e}")
         return
 
-    avarii_azi = rezultat.data or []
-    if not avarii_azi:
+    if not avarii_de_reluat:
         return
-    print(f"🔁 Verific notificări pentru {len(avarii_azi)} avarii de azi (reîncercare cele eșuate)...")
-    for avarie in avarii_azi:
+    print(f"🔁 Verific notificări pentru {len(avarii_de_reluat)} avarii active (reîncercare cele eșuate)...")
+    for avarie in avarii_de_reluat:
         notifica_abonatii(avarie)
+
+
+# ---------------------------------------------------------------------------
+# Curent electric: întreruperi neplanificate (avarii) din API-ul public ArcGIS
+# folosit de harta oficială Rețele Electrice (reteleelectrice.ro/intreruperi).
+# ---------------------------------------------------------------------------
+ARCGIS_INTRERUPERI_URL = (
+    "https://services-eu1.arcgis.com/ZugzWQbNk6XT3BMo/arcgis/rest/services/"
+    "OutagesMapViewLayer/FeatureServer/0/query"
+)
+
+# Localități din județul Constanța (normalizate). API-ul anunță uneori doar zona
+# (ex: "NAVODARI"), alteori o zonă dintr-un oraș mare fără numele orașului
+# (ex: "PALAS" = zonă din Constanța) — lista ne ajută să recunoaștem numele.
+LOCALITATI_CONSTANTA = {
+    "constanta", "navodari", "medgidia", "mangalia", "harsova", "ovidiu",
+    "eforie nord", "eforie sud", "techirghiol", "murfatlar", "cernavoda",
+    "valu lui traian", "lumina", "corbu", "mihail kogalniceanu", "agigea",
+    "basarabi", "cumpana", "topraisar", "comana", "23 august", "costinesti",
+    "limanu", "negru voda", "cogealac", "dobromir", "garliciu", "ghindaresti",
+    "gradina", "independenta", "ion corvin", "istria", "lipnita", "mereni",
+    "mihai viteazu", "mircea voda", "nicolae balcescu", "olari", "ostrov",
+    "pantelimon", "pecineaga", "pestera", "poarta alba", "rasova", "sacele",
+    "saraiu", "seimeni", "silistea", "targusor", "tuzla", "vulturu",
+    "2 mai", "doua mai", "baneasa", "saligny",
+}
+
+
+def _localitati_recunoscute_curent():
+    """Localități statice + cele folosite deja de abonați/avarii (ca vocabular)."""
+    nume = set(LOCALITATI_CONSTANTA)
+    try:
+        rez = supabase.table("abonamente").select("localitate_interes").execute()
+        for r in rez.data or []:
+            nume.add(normalizeaza_text(r.get("localitate_interes") or ""))
+        rez2 = supabase.table("avarii").select("localitate").eq("serviciu", "apa").execute()
+        for r in rez2.data or []:
+            nume.add(normalizeaza_text(r.get("localitate") or ""))
+    except Exception:
+        pass
+    nume.discard("")
+    return nume
+
+
+def mapeaza_zona_intrerupere(desc_norm, localitati):
+    """Atribuie (localitate, cartier) dintr-o zonă anunțată de Rețele Electrice.
+
+    - "NAVODARI" → (navodari, "")
+    - "MEDGIDIA ZONA PORT" → (medgidia, "zona port")
+    - "PALAS" (zonă dintr-un oraș mare, fără numele lui) → (constanta, "palas")
+    """
+    if not desc_norm:
+        return "constanta", ""
+    if desc_norm in localitati:
+        return desc_norm, ""
+    cuvinte = desc_norm.split()
+    if cuvinte and cuvinte[0] in localitati:
+        return cuvinte[0], " ".join(cuvinte[1:]).strip()
+    return "constanta", desc_norm
+
+
+def descriere_intrerupere(attr, desc_raw):
+    """Text descriptiv dintr-un rând ArcGIS (fără date personale)."""
+    text = (f"Întrerupere neplanificată de curent (avarie în rețea), "
+            f"anunțată în zona: {desc_raw}.")
+    clienti = attr.get("num_cli_di")
+    if clienti:
+        text += f" Clienți afectați: {clienti}."
+    estimare = (attr.get("data_prev_") or "").strip()
+    if estimare and "definire" not in estimare.lower():
+        text += f" Estimare remediere: {estimare}."
+    return text
+
+
+def sincronizeaza_intreruperi_curent():
+    """Sincronizează întreruperile neplanificate de curent din județul Constanța.
+
+    API-ul listează doar întreruperile încă active. Cele noi se inserează și
+    declanșează notificări; cele care dispar din feed se marchează REZOLVATE
+    (rămân vizibile în istoricul scurt, apoi sunt șterse după 2 zile)."""
+    print("⚡ Verific întreruperile neplanificate de curent (Rețele Electrice)...")
+    try:
+        raspuns = requests.get(ARCGIS_INTRERUPERI_URL, params={
+            "where": "provincia='CONSTANTA' AND causa_disa='Accidental'",
+            "outFields": "*", "f": "json", "resultRecordCount": "2000",
+        }, headers={"User-Agent": "Mozilla/5.0"}, timeout=25)
+        if raspuns.status_code != 200:
+            print(f"⚠️ API-ul Rețele Electrice a răspuns {raspuns.status_code}.")
+            return
+        features = raspuns.json().get("features", [])
+    except Exception as e:
+        print(f"⚠️ Eroare la interogarea API-ului de curent: {e}")
+        return
+
+    localitati = _localitati_recunoscute_curent()
+    coduri_active = set()
+    intrari = []
+    for feat in features:
+        attr = feat.get("attributes", {}) or {}
+        cod = (attr.get("outage_unique_code") or "").strip()
+        if not cod:
+            continue
+        coduri_active.add(cod)
+        desc_raw = (attr.get("descrizion") or "").strip()
+        localitate, cartier = mapeaza_zona_intrerupere(normalizeaza_text(desc_raw), localitati)
+        data_inceput = (attr.get("data_inter") or "").strip()
+        data_zi = None
+        try:
+            data_zi = datetime.strptime(data_inceput, "%d/%m/%Y %H:%M").date().isoformat()
+        except Exception:
+            pass
+        intrari.append({
+            "cod": cod,
+            "localitate": localitate,
+            "cartier": cartier,
+            "descriere": descriere_intrerupere(attr, desc_raw),
+            "data": data_zi,
+            "data_inceput": data_inceput,
+            "lat": attr.get("latitudine"),
+            "lon": attr.get("longitudin"),
+        })
+
+    existente = {}
+    try:
+        rez = supabase.table("avarii").select("id,sursa_url,status").eq("serviciu", "curent").execute()
+        for r in rez.data or []:
+            if (r.get("sursa_url") or "").startswith("retele:"):
+                existente[r["sursa_url"][7:]] = r
+    except Exception as e:
+        print(f"⚠️ Eroare la citirea întreruperilor existente: {e}")
+        return
+
+    for e in intrari:
+        rand = existente.get(e["cod"])
+        try:
+            if rand and rand.get("status") != "REMEDIAT":
+                # Deja activă în baza noastră: actualizăm datele curente
+                supabase.table("avarii").update({
+                    "latitudine": e["lat"], "longitudine": e["lon"],
+                    "data_inceput": e["data_inceput"], "descriere_text": e["descriere"],
+                }).eq("id", rand["id"]).execute()
+            elif rand:
+                # A reapărut după rezolvare: o reactivăm
+                supabase.table("avarii").update({
+                    "status": "AVARIE", "data_sfarsit": "",
+                    "latitudine": e["lat"], "longitudine": e["lon"],
+                    "data_inceput": e["data_inceput"], "descriere_text": e["descriere"],
+                }).eq("id", rand["id"]).execute()
+                print(f"⚡ Reapariție întrerupere {e['cod']} ({e['localitate']} {e['cartier']}).")
+            else:
+                inserat = supabase.table("avarii").insert({
+                    "serviciu": "curent", "status": "AVARIE",
+                    "localitate": e["localitate"], "strada": "", "cartier": e["cartier"],
+                    "data": e["data"], "data_inceput": e["data_inceput"], "data_sfarsit": "",
+                    "descriere_text": e["descriere"],
+                    "latitudine": e["lat"], "longitudine": e["lon"],
+                    "sursa_url": f"retele:{e['cod']}",
+                }).execute()
+                print(f"⚡ Întrerupere NOUĂ de curent: {e['localitate']} {e['cartier']} ({e['cod']}).")
+                if inserat.data:
+                    notifica_abonatii(inserat.data[0])
+        except Exception as ex:
+            print(f"❌ Eroare la salvarea întreruperii {e['cod']}: {ex}")
+
+    # Marchează rezolvate întreruperile care nu mai apar în feed
+    acum = datetime.now(ZoneInfo("Europe/Bucharest")).strftime("%d/%m/%Y %H:%M")
+    nr_rezolvate = 0
+    for cod, rand in existente.items():
+        if cod not in coduri_active and rand.get("status") != "REMEDIAT":
+            try:
+                supabase.table("avarii").update(
+                    {"status": "REMEDIAT", "data_sfarsit": acum}
+                ).eq("id", rand["id"]).execute()
+                nr_rezolvate += 1
+            except Exception as ex:
+                print(f"❌ Eroare la marcarea rezolvare {cod}: {ex}")
+    if nr_rezolvate:
+        print(f"✅ {nr_rezolvate} întreruperi de curent rezolvate.")
 
 
 def ruleaza_scanare():
     curata_avarii_vechi()
+
     articole = preia_articole_avarii()
 
     for articol in articole:
@@ -750,6 +962,9 @@ def ruleaza_scanare():
             salveaza_avarii(avarii_extrase, articol["url"], articol.get("data"))
         else:
             print("ℹ️ Nu s-au extras avarii din acest articol.")
+
+    # Întreruperile neplanificate de curent (API Rețele Electrice)
+    sincronizeaza_intreruperi_curent()
 
     # Faza de reîncercare: notificările eșuate la rulările anterioare
     # (sau chiar în această rulare) sunt reluate acum.

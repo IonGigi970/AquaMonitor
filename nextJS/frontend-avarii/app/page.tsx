@@ -86,6 +86,12 @@ export default function Home() {
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3 md:gap-6 font-semibold">
                 <Link
+                  href="/curent"
+                  className="hover:text-amber-300 transition-colors text-blue-100 px-2 py-1"
+                >
+                  ⚡ Curent
+                </Link>
+                <Link
                   href="/membership"
                   className="hover:text-blue-200 transition-colors text-blue-100 px-2 py-1"
                 >

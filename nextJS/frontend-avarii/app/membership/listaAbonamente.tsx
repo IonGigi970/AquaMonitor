@@ -7,6 +7,7 @@ import { formateazaText } from "@/lib/format";
 
 interface Abonament {
   id: string;
+  serviciu?: string | null;
   tip_contact: string;
   valoare_contact: string;
   localitate_interes: string;
@@ -20,6 +21,20 @@ const ETICHETE_CANAL: Record<string, string> = {
   whatsapp: "WhatsApp",
   sms: "SMS",
 };
+
+const ETICHETE_SERVICIU: Record<string, { eticheta: string; clase: string }> = {
+  apa: { eticheta: "💧 Apă", clase: "bg-sky-100 text-sky-700" },
+  curent: { eticheta: "⚡ Curent", clase: "bg-amber-100 text-amber-700" },
+};
+
+function BadgeServiciu({ serviciu }: { serviciu?: string | null }) {
+  const config = ETICHETE_SERVICIU[serviciu ?? "apa"] ?? ETICHETE_SERVICIU.apa;
+  return (
+    <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full ${config.clase} mb-2`}>
+      {config.eticheta}
+    </span>
+  );
+}
 
 function StatusTelegram({ username }: { username: string }) {
   const [status, setStatus] = useState<"loading" | "ok" | "missing" | "error">("loading");
@@ -87,9 +102,12 @@ export default function ListaAbonamente({
           className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
         >
           <div>
-            <span className="inline-block text-xs font-bold px-3 py-1 rounded-full bg-blue-100 text-blue-700 mb-2">
-              {ETICHETE_CANAL[abonament.tip_contact] ?? abonament.tip_contact}
-            </span>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <BadgeServiciu serviciu={abonament.serviciu} />
+              <span className="inline-block text-xs font-bold px-3 py-1 rounded-full bg-blue-100 text-blue-700">
+                {ETICHETE_CANAL[abonament.tip_contact] ?? abonament.tip_contact}
+              </span>
+            </div>
             <p className="text-sm font-semibold text-slate-800">{abonament.valoare_contact}</p>
             {abonament.tip_contact === "telegram" && abonament.valoare_contact && (
               <div className="mt-1">
