@@ -86,8 +86,8 @@ export default function MembershipForm({
     <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 md:p-8">
       <h2 className="text-lg font-bold text-slate-800 mb-2">Adaugă un abonament nou</h2>
       <p className="text-sm text-slate-500 mb-6">
-        Primești notificări automat când apare o avarie (apă) sau o întrerupere (curent) în
-        zona ta de interes.
+        Primești notificări automat când apare o avarie (apă) sau o întrerupere (energie
+        electrică) în zona ta de interes.
       </p>
 
       {mesaj && (
@@ -113,7 +113,7 @@ export default function MembershipForm({
             onChange={(e) => setForm({ ...form, serviciu: e.target.value })}
           >
             <option value="apa">💧 Apă (RAJA)</option>
-            <option value="curent">⚡ Curent electric (Rețele Electrice)</option>
+            <option value="curent">⚡ Energie electrică (Rețele Electrice)</option>
           </select>
         </div>
 

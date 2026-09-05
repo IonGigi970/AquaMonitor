@@ -34,7 +34,7 @@ ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "aquamonitorct@gmail.com")
 # Etichete afișate în notificări, per serviciu
 ETICHETE_SERVICIU = {
     "apa": "apă",
-    "curent": "curent electric",
+    "curent": "energie electrică",
 }
 
 
@@ -828,7 +828,7 @@ def mapeaza_zona_intrerupere(desc_norm, localitati):
 
 def descriere_intrerupere(attr, desc_raw):
     """Text descriptiv dintr-un rând ArcGIS (fără date personale)."""
-    text = (f"Întrerupere neplanificată de curent (avarie în rețea), "
+    text = (f"Întrerupere neplanificată de energie electrică (avarie în rețea), "
             f"anunțată în zona: {desc_raw}.")
     clienti = attr.get("num_cli_di")
     if clienti:

@@ -89,7 +89,7 @@ export default function Home() {
                   href="/curent"
                   className="hover:text-amber-300 transition-colors text-blue-100 px-2 py-1"
                 >
-                  ⚡ Curent
+                  ⚡ Energie electrică
                 </Link>
                 <Link
                   href="/membership"

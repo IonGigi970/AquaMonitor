@@ -60,8 +60,13 @@ export default function CurentPage() {
     <div className="bg-slate-50 min-h-screen flex flex-col relative">
       <nav className="bg-amber-600 text-white p-4 shadow-lg sticky top-0 z-40">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="text-2xl font-bold flex items-center gap-2 tracking-tight">
-                ⚡ AquaMonitor CT — Curent
+            <div className="flex flex-col items-start leading-tight">
+                <div className="text-2xl font-bold flex items-center gap-2 tracking-tight">
+                    ⚡ AquaMonitor CT
+                </div>
+                <div className="text-[11px] md:text-xs font-bold uppercase tracking-widest text-amber-200 mt-0.5">
+                    Energie electrică
+                </div>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3 md:gap-6 font-semibold">
                 <Link
@@ -86,12 +91,13 @@ export default function CurentPage() {
         </div>
       </nav>
 
-      <div className="bg-amber-100 border-b border-amber-300 text-amber-900">
-        <div className="max-w-7xl mx-auto px-4 py-3 text-sm font-semibold flex items-start gap-2">
-          <span>⚠️</span>
+      <div className="bg-amber-400 text-amber-950">
+        <div className="max-w-7xl mx-auto px-4 py-3 text-sm md:text-base font-bold flex items-start gap-3">
+          <span className="shrink-0">⚠️</span>
           <span>
-            Aplicația de curent este în dezvoltare și poate să nu fie complet funcțională.
-            Ne extindem treptat de la monitorizarea apei (RAJA) la cea a energiei electrice.
+            Modulul „Energie electrică” este în dezvoltare: informațiile afișate pot fi
+            incomplete sau întârziate. Extindem treptat AquaMonitor CT de la avariile de apă
+            (RAJA) la întreruperile de energie electrică.
           </span>
         </div>
       </div>
@@ -172,9 +178,9 @@ export default function CurentPage() {
       <footer className="bg-amber-800 text-white mt-8">
         <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-center">
           <div className="flex flex-col items-center">
-            <h3 className="font-bold text-lg mb-2">⚡ AquaMonitor CT — Curent</h3>
+            <h3 className="font-bold text-lg mb-2">⚡ AquaMonitor CT — Energie electrică</h3>
             <p className="text-sm text-amber-100 max-w-xs">
-              Monitorizăm întreruperile neplanificate de curent din județul Constanța,
+              Monitorizăm întreruperile neplanificate de energie electrică din județul Constanța,
               anunțate de Rețele Electrice, în timp real.
             </p>
           </div>

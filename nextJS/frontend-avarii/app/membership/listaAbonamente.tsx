@@ -24,7 +24,7 @@ const ETICHETE_CANAL: Record<string, string> = {
 
 const ETICHETE_SERVICIU: Record<string, { eticheta: string; clase: string }> = {
   apa: { eticheta: "💧 Apă", clase: "bg-sky-100 text-sky-700" },
-  curent: { eticheta: "⚡ Curent", clase: "bg-amber-100 text-amber-700" },
+  curent: { eticheta: "⚡ Energie electrică", clase: "bg-amber-100 text-amber-700" },
 };
 
 function BadgeServiciu({ serviciu }: { serviciu?: string | null }) {
