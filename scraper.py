@@ -268,8 +268,12 @@ def extrage_avarii_din_text(text_postare):
 
 
 def trimite_email(destinatar, avarie):
+    """Trimite emailul prin Resend. Returnează True DOAR dacă Resend a acceptat
+    mesajul (status 2xx). Dacă trimiterea eșuează, notificarea NU se marchează ca
+    trimisă, deci scraper-ul o va reîncerca la următoarea rulare."""
     if not RESEND_API_KEY:
-        return
+        print("⚠️ RESEND_API_KEY lipseste, emailul nu a fost trimis.")
+        return False
     try:
         data = avarie.get("data") or ""
         interval = f"{avarie.get('data_inceput', '?')} - {avarie.get('data_sfarsit', '?')}"
@@ -281,7 +285,7 @@ def trimite_email(destinatar, avarie):
             f"<p>{avarie.get('descriere_text', '')}</p>"
             f"<p style='color:#888;font-size:12px'>AquaMonitor CT — te-ai abonat pentru alerte pe zona ta.</p>"
         )
-        requests.post(
+        raspuns = requests.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
             json={
@@ -292,8 +296,14 @@ def trimite_email(destinatar, avarie):
             },
             timeout=15
         )
+        if raspuns.status_code >= 200 and raspuns.status_code < 300:
+            return True
+        print(f"⚠️ Resend a refuzat emailul către {destinatar}: {raspuns.status_code} "
+              f"{raspuns.text[:200]} — se va reîncerca la următoarea rulare.")
+        return False
     except Exception as e:
-        print(f"⚠️ Eroare la trimiterea emailului către {destinatar}: {e}")
+        print(f"⚠️ Eroare la trimiterea emailului către {destinatar}: {e} — se va reîncerca.")
+        return False
 
 
 def gaseste_chat_id_telegram(username):
@@ -345,13 +355,17 @@ username).eq("activ", True).limit(1).execute()
 
 
 def trimite_telegram(contact, avarie):
+    """Trimite mesajul Telegram. Returnează True DOAR dacă Telegram a confirmat
+    livrarea (ok=true). La eșec, notificarea nu se marchează ca trimisă, deci se
+    reîncearcă la următoarea rulare."""
     if not TELEGRAM_BOT_TOKEN:
-        return
+        print("⚠️ TELEGRAM_BOT_TOKEN lipseste, mesajul nu a fost trimis.")
+        return False
     chat_id = gaseste_chat_id_telegram(contact)
     if not chat_id:
         print(f"⚠️ Nu am găsit chat_id pentru Telegram {contact}. "
               f"Utilizatorul trebuie să pornească botul cu /start.")
-        return
+        return False
     try:
         data = avarie.get("data") or "?"
         mesaj = (
@@ -362,13 +376,24 @@ def trimite_telegram(contact, avarie):
             f"Interval: {avarie.get('data_inceput', '?')} - {avarie.get('data_sfarsit', '?')}\n"
             f"{avarie.get('descriere_text', '')}"
         )
-        requests.post(
+        raspuns = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
             json={"chat_id": chat_id, "text": mesaj, "parse_mode": "Markdown"},
             timeout=15
         )
+        if raspuns.status_code == 200:
+            date = raspuns.json()
+            if date.get("ok"):
+                return True
+            print(f"⚠️ Telegram a refuzat mesajul către {contact}: {date.get('description', '')} "
+                  f"— se va reîncerca.")
+            return False
+        print(f"⚠️ Telegram a răspuns cu {raspuns.status_code} pentru {contact} "
+              f"— se va reîncerca.")
+        return False
     except Exception as e:
-        print(f"⚠️ Eroare la trimiterea mesajului Telegram către {chat_id}: {e}")
+        print(f"⚠️ Eroare la trimiterea mesajului Telegram către {chat_id}: {e} — se va reîncerca.")
+        return False
 
 
 # Abonamente care au primit deja notificare pentru un comunicat sursă (în această rulare).
@@ -431,11 +456,18 @@ def notifica_abonatii(avarie_salvata):
         tip = abonament.get("tip_contact")
         contact = abonament.get("valoare_contact")
 
+        trimis_cu_succes = False
         if tip == "email":
-            trimite_email(contact, avarie_salvata)
+            trimis_cu_succes = trimite_email(contact, avarie_salvata)
         elif tip == "telegram":
-            trimite_telegram(contact, avarie_salvata)
+            trimis_cu_succes = trimite_telegram(contact, avarie_salvata)
         # whatsapp / sms: neimplementate încă (necesită cont Twilio sau similar)
+
+        # Marcăm notificarea ca trimisă DOAR dacă livrarea a fost confirmată.
+        # Dacă a eșuat (ex: Resend refuză expeditorul, bot blocat), rămâne
+        # nemarcată și scraper-ul o reîncearcă la următoarea rulare (5 minute).
+        if not trimis_cu_succes:
+            continue
 
         supabase.table("notificari_trimise").insert({
             "abonament_id": abonament["id"],
