@@ -1,8 +1,10 @@
 import os
 import json
 import time
+import smtplib
 import unicodedata
 from datetime import datetime, timedelta
+from email.message import EmailMessage
 from zoneinfo import ZoneInfo
 
 import requests
@@ -21,16 +23,52 @@ model = genai.GenerativeModel('gemini-3.6-flash')
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "AquaMonitor CT <onboarding@resend.dev>")
+# Alternativa gratuita fara domeniu: trimitere prin Gmail SMTP.
+# GMAIL_USER = contul (ex: aquamonitorct@gmail.com), GMAIL_APP_PASSWORD = parola de aplicatie
+# (Google -> Cont -> Securitate -> Verificare in 2 pasi -> Parole pentru aplicatii).
+GMAIL_USER = os.getenv("GMAIL_USER")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "aquamonitorct@gmail.com")
 
 
+def trimite_email_gmail(destinatar, subiect, html):
+    """Trimite un email prin Gmail SMTP (varianta gratuita, fara domeniu propriu).
+    Returnează True doar dacă serverul Gmail a acceptat mesajul."""
+    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
+        return False
+    try:
+        mesaj = EmailMessage()
+        mesaj["Subject"] = subiect
+        mesaj["From"] = GMAIL_USER
+        mesaj["To"] = destinatar
+        mesaj.set_content("Vizualizeaza acest email intr-un client care suporta HTML.")
+        mesaj.add_alternative(html, subtype="html")
+
+        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=20)
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+        server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+        server.send_message(mesaj)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"⚠️ Eroare la trimiterea prin Gmail către {destinatar}: {e} — se va reîncerca.")
+        return False
+
+
 def trimite_log_admin(subiect, html):
     """Trimite un email de log către admin (conturi noi, notificări trimise)."""
-    if not RESEND_API_KEY or not ADMIN_EMAIL:
+    if not ADMIN_EMAIL:
+        return
+    if GMAIL_USER and GMAIL_APP_PASSWORD:
+        trimite_email_gmail(ADMIN_EMAIL, subiect, html)
+        return
+    if not RESEND_API_KEY:
         return
     try:
-        requests.post(
+        raspuns = requests.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
             json={
@@ -41,6 +79,8 @@ def trimite_log_admin(subiect, html):
             },
             timeout=15
         )
+        if raspuns.status_code < 200 or raspuns.status_code >= 300:
+            print(f"⚠️ Resend a refuzat log-ul admin: {raspuns.status_code} {raspuns.text[:200]}")
     except Exception as e:
         print(f"⚠️ Eroare la trimiterea log-ului admin: {e}")
 
@@ -268,30 +308,36 @@ def extrage_avarii_din_text(text_postare):
 
 
 def trimite_email(destinatar, avarie):
-    """Trimite emailul prin Resend. Returnează True DOAR dacă Resend a acceptat
-    mesajul (status 2xx). Dacă trimiterea eșuează, notificarea NU se marchează ca
-    trimisă, deci scraper-ul o va reîncerca la următoarea rulare."""
+    """Trimite emailul. Returnează True DOAR dacă furnizorul a acceptat mesajul
+    (Gmail SMTP dacă e configurat — varianta gratuită — altfel Resend).
+    La eșec, notificarea NU se marchează ca trimisă, deci scraper-ul o va
+    reîncerca la următoarea rulare."""
+    data = avarie.get("data") or ""
+    interval = f"{avarie.get('data_inceput', '?')} - {avarie.get('data_sfarsit', '?')}"
+    html = (
+        f"<p><b>📅 Data: {data}</b></p>"
+        f"<p><b>📍 Locație: {avarie['localitate']}, {avarie['strada']}</b></p>"
+        f"<p><b>Status: {avarie['status']}</b></p>"
+        f"<p>Interval: {interval}</p>"
+        f"<p>{avarie.get('descriere_text', '')}</p>"
+        f"<p style='color:#888;font-size:12px'>AquaMonitor CT — te-ai abonat pentru alerte pe zona ta.</p>"
+    )
+    subiect = f"🚨 Alertă apă: {avarie['localitate']} - {avarie['status']}"
+
+    if GMAIL_USER and GMAIL_APP_PASSWORD:
+        return trimite_email_gmail(destinatar, subiect, html)
+
     if not RESEND_API_KEY:
-        print("⚠️ RESEND_API_KEY lipseste, emailul nu a fost trimis.")
+        print("⚠️ Niciun canal de email configurat (GMAIL_USER sau RESEND_API_KEY).")
         return False
     try:
-        data = avarie.get("data") or ""
-        interval = f"{avarie.get('data_inceput', '?')} - {avarie.get('data_sfarsit', '?')}"
-        html = (
-            f"<p><b>📅 Data: {data}</b></p>"
-            f"<p><b>📍 Locație: {avarie['localitate']}, {avarie['strada']}</b></p>"
-            f"<p><b>Status: {avarie['status']}</b></p>"
-            f"<p>Interval: {interval}</p>"
-            f"<p>{avarie.get('descriere_text', '')}</p>"
-            f"<p style='color:#888;font-size:12px'>AquaMonitor CT — te-ai abonat pentru alerte pe zona ta.</p>"
-        )
         raspuns = requests.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
             json={
                 "from": RESEND_FROM_EMAIL,
                 "to": [destinatar],
-                "subject": f"🚨 Alertă apă: {avarie['localitate']} - {avarie['status']}",
+                "subject": subiect,
                 "html": html
             },
             timeout=15
