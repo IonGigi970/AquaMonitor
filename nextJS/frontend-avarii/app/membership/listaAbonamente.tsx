@@ -23,18 +23,24 @@ const ETICHETE_CANAL: Record<string, string> = {
 
 function StatusTelegram({ username }: { username: string }) {
   const [status, setStatus] = useState<"loading" | "ok" | "missing" | "error">("loading");
+  const [activ, setActiv] = useState<boolean | null>(null);
 
   useEffect(() => {
     fetch(`/api/telegram/check?username=${encodeURIComponent(username.replace(/^@/, ""))}`)
       .then((r) => r.json())
-      .then((data) => setStatus(data.found ? "ok" : "missing"))
+      .then((data) => {
+        setActiv(data.activ ?? null);
+        setStatus(data.found ? "ok" : "missing");
+      })
       .catch(() => setStatus("error"));
   }, [username]);
 
   if (status === "loading") return <span className="text-xs text-slate-400">se verifică...</span>;
+  if (status === "error") return <span className="text-xs text-red-500">eroare verificare</span>;
+  if (status === "ok" && activ === false)
+    return <span className="text-xs font-semibold text-slate-500">⛔ Notificările sunt dezactivate</span>;
   if (status === "ok")
     return <span className="text-xs font-semibold text-emerald-600">✅ Botul te recunoaște</span>;
-  if (status === "error") return <span className="text-xs text-red-500">eroare verificare</span>;
   return (
     <span className="text-xs text-orange-600">
       ⚠️ Nu ai apăsat /start în <b>@JimmyWaterBot</b>

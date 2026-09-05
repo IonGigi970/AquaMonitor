@@ -448,6 +448,43 @@ def trimite_telegram(contact, avarie):
 notificari_pe_sursa = set()
 
 
+def contine_substring(a, b):
+    """True dacă a e subșir al lui b, dar niciunul gol ("" in "x" e True în Python,
+    ceea ce ar potrivi orice avarie cu orice abonat când un câmp e gol)."""
+    return bool(a) and bool(b) and a in b
+
+
+def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, cartier_norm):
+    """Returnează True dacă un abonament (stradă/cartier de interes) se potrivește
+    cu o avarie (stradă/cartier normalizate).
+
+    Reguli:
+    - Dacă abonatul nu are nici stradă, nici cartier → se potrivește cu orice avarie
+      din localitatea lui (abonament pe toată localitatea).
+    - Potrivire bidirecțională pe subșir: acoperă nume scrise parțial de RAJA
+      (ex: abonat pe "Revoluției din 22 Decembrie 1989", anunț cu "Revoluției").
+    - Câmpurile se verifică încrucișat (cartierul abonatului în strada avariei și
+      invers), ca să acopere abonamente vechi salvate în câmpul greșit."""
+    if cartier_abonament or strada_abonament:
+        potrivire = False
+        if cartier_abonament:
+            potrivire = (
+                contine_substring(cartier_abonament, cartier_norm)
+                or contine_substring(cartier_norm, cartier_abonament)
+                or contine_substring(cartier_abonament, strada_norm)
+                or contine_substring(strada_norm, cartier_abonament)
+            )
+        if strada_abonament and not potrivire:
+            potrivire = (
+                contine_substring(strada_abonament, strada_norm)
+                or contine_substring(strada_norm, strada_abonament)
+                or contine_substring(strada_abonament, cartier_norm)
+                or contine_substring(cartier_norm, strada_abonament)
+            )
+        return potrivire
+    return True
+
+
 def notifica_abonatii(avarie_salvata):
     """Găsește abonații interesați de această zonă și le trimite alertă (o singură dată/abonament).
 
@@ -467,24 +504,8 @@ def notifica_abonatii(avarie_salvata):
         strada_abonament = normalizeaza_text(abonament.get("strada_interes") or "")
         cartier_abonament = normalizeaza_text(abonament.get("cartier_interes") or "")
 
-        # Potrivire stradă SAU cartier: dacă abonatul a specificat oricare dintre ele,
-        # avaria se potrivește dacă numele apare în câmpul corespunzător SAU în celălalt
-        # (acoperă rânduri vechi unde numele cartierului a rămas în câmpul "strada",
-        # ex: "tomis 3, cuza voda", și abonamente vechi pe cartier salvate ca stradă)
-        if cartier_abonament or strada_abonament:
-            potrivire = False
-            if cartier_abonament:
-                potrivire = (
-                    cartier_abonament in cartier_norm or cartier_norm in cartier_abonament
-                    or cartier_abonament in strada_norm or strada_norm in cartier_abonament
-                )
-            if strada_abonament and not potrivire:
-                potrivire = (
-                    strada_abonament in strada_norm or strada_norm in strada_abonament
-                    or strada_abonament in cartier_norm or cartier_norm in strada_abonament
-                )
-            if not potrivire:
-                continue
+        if not se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, cartier_norm):
+            continue
 
         # O singură notificare per abonament pentru același comunicat sursă
         if sursa_url and (abonament["id"], sursa_url) in notificari_pe_sursa:
@@ -686,6 +707,33 @@ def articol_deja_procesat(post_url):
     return bool(rezultat.data)
 
 
+def reincearca_notificari_esuate():
+    """Reîncearcă notificările pentru avariile de azi care nu au ajuns la toți abonații.
+
+    Când o trimitere eșuează (email refuzat, bot indisponibil), notificarea nu se
+    marchează ca trimisă. La rulările următoare articolul e deja procesat și nu mai
+    trece prin notifica_abonatii — fără această fază, notificarea eșuată s-ar pierde
+    definitiv. Aici reluăm notificarea pentru toate avariile de azi; deduplicarea
+    din notificari_trimise (abonament+avarie) și din notificari_pe_sursa garantează
+    că nimeni nu primește de două ori aceeași alertă."""
+    azi_str = azi_bucuresti().isoformat()
+    try:
+        rezultat = supabase.table("avarii") \
+            .select("id,localitate,strada,cartier,status,descriere_text,data_inceput,data_sfarsit,data,sursa_url") \
+            .eq("data", azi_str) \
+            .execute()
+    except Exception as e:
+        print(f"⚠️ Eroare la preluarea avariilor pentru reîncercare: {e}")
+        return
+
+    avarii_azi = rezultat.data or []
+    if not avarii_azi:
+        return
+    print(f"🔁 Verific notificări pentru {len(avarii_azi)} avarii de azi (reîncercare cele eșuate)...")
+    for avarie in avarii_azi:
+        notifica_abonatii(avarie)
+
+
 def ruleaza_scanare():
     curata_avarii_vechi()
     articole = preia_articole_avarii()
@@ -702,6 +750,10 @@ def ruleaza_scanare():
             salveaza_avarii(avarii_extrase, articol["url"], articol.get("data"))
         else:
             print("ℹ️ Nu s-au extras avarii din acest articol.")
+
+    # Faza de reîncercare: notificările eșuate la rulările anterioare
+    # (sau chiar în această rulare) sunt reluate acum.
+    reincearca_notificari_esuate()
 
 
 if __name__ == "__main__":
