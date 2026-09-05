@@ -4,3 +4,4 @@ python-dotenv
 supabase
 google-generativeai
 tzdata
+pypdf

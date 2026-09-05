@@ -34,16 +34,28 @@ function esteProgramata(a: Intrerupere): boolean {
   return a.tip_intrerupere === 'programata';
 }
 
+const HARTA_OFICIALA_RETELE =
+  'https://edmro.maps.arcgis.com/apps/webappviewer/index.html?id=2cd727b1ddb84896a8cb6dc6245af3e5';
+
 function CardIntrerupere({ item }: { item: Intrerupere }) {
   const programata = esteProgramata(item);
   const rezolvata = esteRezolvata(item);
+  const hrefSursa = programata ? '/api/curent/anunt' : HARTA_OFICIALA_RETELE;
+  const textSursa = programata
+    ? 'Vezi anunțul oficial (PDF Rețele Electrice) →'
+    : 'Vezi pe harta oficială Rețele Electrice →';
 
   const culoareBord = rezolvata ? 'border-emerald-500' : programata ? 'border-amber-500' : 'border-red-500';
   const culoareBadge = rezolvata ? 'bg-emerald-100 text-emerald-700' : programata ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600';
   const textBadge = rezolvata ? '✅ Rezolvat' : programata ? '📅 Programată' : '⚡ Întrerupere';
 
   return (
-    <div className={`block bg-white p-5 rounded-2xl shadow-sm border-l-4 hover:shadow-md transition-shadow relative overflow-hidden ${culoareBord}`}>
+    <a
+      href={hrefSursa}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`block bg-white p-5 rounded-2xl shadow-sm border-l-4 hover:shadow-md transition-shadow relative overflow-hidden ${culoareBord}`}
+    >
       <div className={`absolute top-0 right-0 text-xs font-bold px-3 py-1 rounded-bl-lg ${culoareBadge}`}>
         {textBadge}
       </div>
@@ -55,14 +67,14 @@ function CardIntrerupere({ item }: { item: Intrerupere }) {
       </p>
 
       {item.data_inceput && (
-        <div className="flex items-center gap-2 text-xs font-bold text-amber-700 mt-3 bg-amber-50 p-2 rounded-lg">
-          {programata ? '🕒 Începe:' : '⏱️ Începută:'} {item.data_inceput}
+        <div className={`flex items-center gap-2 text-xs font-bold mt-3 p-2 rounded-lg ${rezolvata ? 'text-slate-600 bg-slate-50' : 'text-amber-700 bg-amber-50'}`}>
+          {rezolvata ? '⏱️ Începută:' : programata ? '🕒 Începe:' : '⏱️ Începută:'} {item.data_inceput}
         </div>
       )}
 
       {item.data_sfarsit && (
         <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 mt-3 bg-emerald-50 p-2 rounded-lg">
-          {programata ? '🏁 Sfârșit estimat:' : '✅ Rezolvată:'} {item.data_sfarsit}
+          {rezolvata || !programata ? '✅ Rezolvată:' : '🏁 Sfârșit estimat:'} {item.data_sfarsit}
         </div>
       )}
 
@@ -72,7 +84,8 @@ function CardIntrerupere({ item }: { item: Intrerupere }) {
         </div>
       )}
       <p className="text-xs text-slate-600 mt-3 leading-relaxed">{item.descriere_text}</p>
-    </div>
+      <p className="text-xs text-blue-600 mt-2 font-semibold">{textSursa}</p>
+    </a>
   );
 }
 

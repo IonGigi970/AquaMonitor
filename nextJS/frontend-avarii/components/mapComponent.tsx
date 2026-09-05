@@ -40,6 +40,9 @@ const iconPresiune = creeazaIcon('orange');
 const iconRemediat = creeazaIcon('green');
 const iconProgramat = creeazaIcon('orange');
 
+const HARTA_OFICIALA_RETELE =
+  'https://edmro.maps.arcgis.com/apps/webappviewer/index.html?id=2cd727b1ddb84896a8cb6dc6245af3e5';
+
 function iconPentruStatus(avarie: Avarie) {
   if (avarie.status === 'REMEDIAT') return iconRemediat;
   if (avarie.tip_intrerupere === 'programata') return iconProgramat;
@@ -129,6 +132,32 @@ export default function MapComponent({ avarii }: { avarii: Avarie[] }) {
                         className="text-xs text-blue-600 font-semibold underline"
                       >
                         Comunicat RAJA →
+                      </a>
+                    </>
+                  )}
+                  {avarie.tip_intrerupere === 'programata' && (!avarie.sursa_url || !avarie.sursa_url.startsWith('http')) && (
+                    <>
+                      <br/>
+                      <a
+                        href="/api/curent/anunt"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 font-semibold underline"
+                      >
+                        Anunț oficial (PDF) →
+                      </a>
+                    </>
+                  )}
+                  {avarie.sursa_url && avarie.sursa_url.startsWith('retele:') && (
+                    <>
+                      <br/>
+                      <a
+                        href={HARTA_OFICIALA_RETELE}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 font-semibold underline"
+                      >
+                        Harta oficială →
                       </a>
                     </>
                   )}
