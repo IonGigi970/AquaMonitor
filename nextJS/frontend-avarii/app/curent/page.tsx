@@ -86,6 +86,16 @@ export default function CurentPage() {
         </div>
       </nav>
 
+      <div className="bg-amber-100 border-b border-amber-300 text-amber-900">
+        <div className="max-w-7xl mx-auto px-4 py-3 text-sm font-semibold flex items-start gap-2">
+          <span>⚠️</span>
+          <span>
+            Aplicația de curent este în dezvoltare și poate să nu fie complet funcțională.
+            Ne extindem treptat de la monitorizarea apei (RAJA) la cea a energiei electrice.
+          </span>
+        </div>
+      </div>
+
       <div className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="col-span-1 flex flex-col gap-6">
             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
