@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 import requests
 from dotenv import load_dotenv
 from supabase import create_client, Client
-import google.generativeai as genai
+from google import genai
 from bs4 import BeautifulSoup
 import pdfplumber
 
@@ -21,9 +21,9 @@ load_dotenv()
 
 # Asigură-te că în .env, SUPABASE_KEY este cheia 'service_role', nu 'anon'!
 supabase: Client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-model = genai.GenerativeModel('gemini-3.6-flash')
+client_genai = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+MODEL_AI = 'gemini-3.6-flash'
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "AquaMonitor CT <onboarding@resend.dev>")
@@ -307,7 +307,10 @@ def extrage_avarii_din_text(text_postare):
     """
 
     try:
-        raspuns_ai = model.generate_content(prompt)
+        raspuns_ai = client_genai.models.generate_content(
+            model=MODEL_AI,
+            contents=prompt,
+        )
         text_json = raspuns_ai.text.replace('```json', '').replace('```', '').strip()
         avarii_extrase = json.loads(text_json)
         if isinstance(avarii_extrase, list):
