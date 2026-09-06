@@ -16,6 +16,15 @@ function normalizeazaText(text: string) {
     .trim();
 }
 
+const JUDETE = [
+  "Alba", "Arad", "Argeș", "Bacău", "Bihor", "Bistrița-Năsăud", "Botoșani",
+  "Brașov", "Brăila", "București", "Buzău", "Caraș-Severin", "Călărași", "Cluj",
+  "Constanța", "Covasna", "Dâmbovița", "Dolj", "Galați", "Giurgiu", "Gorj",
+  "Harghita", "Hunedoara", "Ialomița", "Iași", "Ilfov", "Maramureș", "Mehedinți",
+  "Mureș", "Neamț", "Olt", "Prahova", "Satu Mare", "Sălaj", "Sibiu", "Suceava",
+  "Teleorman", "Timiș", "Tulcea", "Vaslui", "Vâlcea", "Vrancea",
+];
+
 export default function MembershipForm({
   userId,
   userEmail,
@@ -28,6 +37,7 @@ export default function MembershipForm({
 
   const [form, setForm] = useState({
     serviciu: "apa",
+    judet: "",
     tip_contact: "email",
     valoare_contact: userEmail,
     localitate_interes: "",
@@ -36,6 +46,14 @@ export default function MembershipForm({
   });
   const [seSalveaza, setSeSalveaza] = useState(false);
   const [mesaj, setMesaj] = useState<{ text: string; tip: "success" | "error" } | null>(null);
+
+  const handleServiciuChange = (serviciu: string) => {
+    setForm((prev) => ({
+      ...prev,
+      serviciu,
+      judet: serviciu === "curent" ? (prev.judet || "Constanța") : "",
+    }));
+  };
 
   const handleTipContactChange = (tip: string) => {
     setForm((prev) => ({
@@ -53,6 +71,7 @@ export default function MembershipForm({
     const dateCuratate = {
       user_id: userId,
       serviciu: form.serviciu,
+      judet: form.serviciu === "curent" ? form.judet : "",
       tip_contact: form.tip_contact,
       valoare_contact: form.valoare_contact.trim(),
       localitate_interes: normalizeazaText(form.localitate_interes),
@@ -73,6 +92,7 @@ export default function MembershipForm({
     setMesaj({ text: "Abonament adăugat cu succes!", tip: "success" });
     setForm({
       serviciu: "apa",
+      judet: "",
       tip_contact: "email",
       valoare_contact: userEmail,
       localitate_interes: "",
@@ -110,12 +130,38 @@ export default function MembershipForm({
             name="serviciu"
             className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-slate-900"
             value={form.serviciu}
-            onChange={(e) => setForm({ ...form, serviciu: e.target.value })}
+            onChange={(e) => handleServiciuChange(e.target.value)}
           >
             <option value="apa">💧 Apă (RAJA)</option>
             <option value="curent">⚡ Energie electrică (Rețele Electrice)</option>
           </select>
         </div>
+
+        {form.serviciu === "curent" && (
+          <div>
+            <label htmlFor="judet" className="block text-sm font-semibold text-slate-700 mb-1">
+              Județ
+            </label>
+            <select
+              id="judet"
+              name="judet"
+              required
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-slate-900"
+              value={form.judet}
+              onChange={(e) => setForm({ ...form, judet: e.target.value })}
+            >
+              {JUDETE.map((judet) => (
+                <option key={judet} value={judet}>
+                  {judet}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-400 mt-1">
+              Localități cu același nume există în mai multe județe (ex: Mihail
+              Kogălniceanu în Constanța și Ialomița) — județul evită alertele din alt județ.
+            </p>
+          </div>
+        )}
 
         <div>
           <label htmlFor="tip_contact" className="block text-sm font-semibold text-slate-700 mb-1">

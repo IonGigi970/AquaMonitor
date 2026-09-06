@@ -8,6 +8,7 @@ import { formateazaText } from "@/lib/format";
 interface Abonament {
   id: string;
   serviciu?: string | null;
+  judet?: string | null;
   tip_contact: string;
   valoare_contact: string;
   localitate_interes: string;
@@ -138,12 +139,17 @@ export default function ListaAbonamente({
             className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
           >
             <div>
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                <BadgeServiciu serviciu={abonament.serviciu} />
-                <span className="inline-block text-xs font-bold px-3 py-1 rounded-full bg-blue-100 text-blue-700">
-                  {ETICHETE_CANAL[abonament.tip_contact] ?? abonament.tip_contact}
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <BadgeServiciu serviciu={abonament.serviciu} />
+              {abonament.judet && (
+                <span className="inline-block text-xs font-bold px-3 py-1 rounded-full bg-violet-100 text-violet-700">
+                  {formateazaText(abonament.judet)}
                 </span>
-              </div>
+              )}
+              <span className="inline-block text-xs font-bold px-3 py-1 rounded-full bg-blue-100 text-blue-700">
+                {ETICHETE_CANAL[abonament.tip_contact] ?? abonament.tip_contact}
+              </span>
+            </div>
               <p className="text-sm font-semibold text-slate-800">{abonament.valoare_contact}</p>
               {abonament.tip_contact === "telegram" && abonament.valoare_contact && (
                 <div className="mt-1">
