@@ -492,7 +492,7 @@ def contine_substring(a, b):
     return bool(a) and bool(b) and a in b
 
 
-def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, cartier_norm):
+def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, cartier_norm, text_zona=""):
     """Returnează True dacă un abonament (stradă/cartier de interes) se potrivește
     cu o avarie (stradă/cartier normalizate).
 
@@ -502,7 +502,10 @@ def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, 
     - Potrivire bidirecțională pe subșir: acoperă nume scrise parțial de RAJA
       (ex: abonat pe "Revoluției din 22 Decembrie 1989", anunț cu "Revoluției").
     - Câmpurile se verifică încrucișat (cartierul abonatului în strada avariei și
-      invers), ca să acopere abonamente vechi salvate în câmpul greșit."""
+      invers), ca să acopere abonamente vechi salvate în câmpul greșit.
+    - Pentru deconectările programate zona reală stă în textul anunțului (detalii),
+      nu în câmpuri structurate: dacă text_zona e dat, termenul abonatului se caută
+      și acolo, la graniță de cuvânt (ex: cartier "viile noi" prinde "zona Viile Noi")."""
     if cartier_abonament or strada_abonament:
         potrivire = False
         if cartier_abonament:
@@ -519,6 +522,10 @@ def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, 
                 or contine_substring(strada_abonament, cartier_norm)
                 or contine_substring(cartier_norm, strada_abonament)
             )
+        if not potrivire and text_zona:
+            for termen in (cartier_abonament, strada_abonament):
+                if termen and re.search(r"(?<![a-z0-9])" + re.escape(termen) + r"(?![a-z0-9])", text_zona):
+                    return True
         return potrivire
     return True
 
@@ -536,6 +543,14 @@ def notifica_abonatii(avarie_salvata):
     sursa_url = avarie_salvata.get("sursa_url")
 
     serviciu = avarie_salvata.get("serviciu") or "apa"
+    # La deconectările programate zona reală (cartiere/străzi) e doar în textul
+    # anunțului, deci îl punem la dispoziția potrivirii pentru abonați pe stradă/cartier.
+    text_zona = ""
+    if serviciu == "curent" and avarie_salvata.get("tip_intrerupere") == "programata":
+        text_zona = normalizeaza_text(
+            f"{avarie_salvata.get('detalii_anunt') or ''} {avarie_salvata.get('descriere_text') or ''}"
+        )
+
     rezultat = supabase.table("abonamente").select("*") \
         .eq("activ", True) \
         .eq("serviciu", serviciu) \
@@ -546,7 +561,7 @@ def notifica_abonatii(avarie_salvata):
         strada_abonament = normalizeaza_text(abonament.get("strada_interes") or "")
         cartier_abonament = normalizeaza_text(abonament.get("cartier_interes") or "")
 
-        if not se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, cartier_norm):
+        if not se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, cartier_norm, text_zona):
             continue
 
         # O singură notificare per abonament pentru același comunicat sursă
@@ -767,7 +782,7 @@ def reincearca_notificari_esuate():
     din notificari_pe_sursa garantează că nimeni nu primește de două ori aceeași
     alertă."""
     azi_str = azi_bucuresti().isoformat()
-    selecteaza = "id,serviciu,localitate,strada,cartier,status,descriere_text,data_inceput,data_sfarsit,data,sursa_url,tip_intrerupere,judet"
+    selecteaza = "id,serviciu,localitate,strada,cartier,status,descriere_text,data_inceput,data_sfarsit,data,sursa_url,tip_intrerupere,judet,detalii_anunt"
     avarii_de_reluat = []
     try:
         # Avarii apă publicate azi
