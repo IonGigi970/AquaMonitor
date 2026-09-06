@@ -73,6 +73,10 @@ export default function ListaAbonamente({
   const router = useRouter();
   const supabase = createClient();
   const [seSterge, setSeSterge] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState<
+    Record<string, "trimite" | "gata" | "eroare" | undefined>
+  >({});
+  const [seTrimiteTest, setSeTrimiteTest] = useState<string | null>(null);
 
   const handleDezabonare = async (id: string) => {
     setSeSterge(id);
@@ -94,41 +98,94 @@ export default function ListaAbonamente({
     router.refresh();
   };
 
+  const handleTrimiteTest = async (id: string) => {
+    if (seTrimiteTest) return;
+    setSeTrimiteTest(id);
+    setTestStatus((prev) => ({ ...prev, [id]: "trimite" }));
+
+    try {
+      const raspuns = await fetch("/api/test-notificare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ abonament_id: id }),
+      });
+      const date = await raspuns.json().catch(() => ({}));
+
+      if (!raspuns.ok) {
+        setTestStatus((prev) => ({ ...prev, [id]: "eroare" }));
+        console.error(date);
+        return;
+      }
+
+      setTestStatus((prev) => ({ ...prev, [id]: "gata" }));
+      setTimeout(() => {
+        setTestStatus((prev) => ({ ...prev, [id]: undefined }));
+      }, 8000);
+    } catch {
+      setTestStatus((prev) => ({ ...prev, [id]: "eroare" }));
+    } finally {
+      setSeTrimiteTest(null);
+    }
+  };
+
   return (
     <div className="space-y-3">
-      {abonamente.map((abonament) => (
-        <div
-          key={abonament.id}
-          className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
-        >
-          <div>
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <BadgeServiciu serviciu={abonament.serviciu} />
-              <span className="inline-block text-xs font-bold px-3 py-1 rounded-full bg-blue-100 text-blue-700">
-                {ETICHETE_CANAL[abonament.tip_contact] ?? abonament.tip_contact}
-              </span>
-            </div>
-            <p className="text-sm font-semibold text-slate-800">{abonament.valoare_contact}</p>
-            {abonament.tip_contact === "telegram" && abonament.valoare_contact && (
-              <div className="mt-1">
-                <StatusTelegram username={abonament.valoare_contact} />
-              </div>
-            )}
-            <p className="text-sm text-slate-500">
-              {formateazaText(abonament.localitate_interes)}
-              {abonament.strada_interes ? ` — ${formateazaText(abonament.strada_interes)}` : ""}
-              {abonament.cartier_interes ? ` — ${formateazaText(abonament.cartier_interes)}` : ""}
-            </p>
-          </div>
-          <button
-            onClick={() => handleDezabonare(abonament.id)}
-            disabled={seSterge === abonament.id}
-            className="self-start md:self-center bg-red-100 text-red-600 font-semibold px-4 py-2 rounded-xl hover:bg-red-200 transition-colors disabled:opacity-50 whitespace-nowrap"
+      {abonamente.map((abonament) => {
+        const testare = testStatus[abonament.id];
+        return (
+          <div
+            key={abonament.id}
+            className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
           >
-            {seSterge === abonament.id ? "Se șterge..." : "Dezabonare"}
-          </button>
-        </div>
-      ))}
+            <div>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <BadgeServiciu serviciu={abonament.serviciu} />
+                <span className="inline-block text-xs font-bold px-3 py-1 rounded-full bg-blue-100 text-blue-700">
+                  {ETICHETE_CANAL[abonament.tip_contact] ?? abonament.tip_contact}
+                </span>
+              </div>
+              <p className="text-sm font-semibold text-slate-800">{abonament.valoare_contact}</p>
+              {abonament.tip_contact === "telegram" && abonament.valoare_contact && (
+                <div className="mt-1">
+                  <StatusTelegram username={abonament.valoare_contact} />
+                </div>
+              )}
+              <p className="text-sm text-slate-500">
+                {formateazaText(abonament.localitate_interes)}
+                {abonament.strada_interes ? ` — ${formateazaText(abonament.strada_interes)}` : ""}
+                {abonament.cartier_interes ? ` — ${formateazaText(abonament.cartier_interes)}` : ""}
+              </p>
+              {testare === "gata" && (
+                <p className="text-xs font-semibold text-emerald-600 mt-1">
+                  ✅ Notificarea de test e în curs de trimitere — verifică-ți{" "}
+                  {abonament.tip_contact === "telegram" ? "Telegram" : "emailul"} în ~1-2 minute.
+                </p>
+              )}
+              {testare === "eroare" && (
+                <p className="text-xs font-semibold text-red-600 mt-1">
+                  ❌ Nu s-a putut trimite testul. Încearcă din nou în câteva minute.
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2 self-start md:self-center">
+              <button
+                onClick={() => handleTrimiteTest(abonament.id)}
+                disabled={seTrimiteTest === abonament.id || !!seSterge}
+                className="bg-blue-100 text-blue-700 font-semibold px-4 py-2 rounded-xl hover:bg-blue-200 transition-colors disabled:opacity-50 whitespace-nowrap"
+              >
+                {seTrimiteTest === abonament.id ? "Se trimite..." : "Trimite notificare de test"}
+              </button>
+              <button
+                onClick={() => handleDezabonare(abonament.id)}
+                disabled={seSterge === abonament.id || !!seTrimiteTest}
+                className="bg-red-100 text-red-600 font-semibold px-4 py-2 rounded-xl hover:bg-red-200 transition-colors disabled:opacity-50 whitespace-nowrap"
+              >
+                {seSterge === abonament.id ? "Se șterge..." : "Dezabonare"}
+              </button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

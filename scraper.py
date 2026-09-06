@@ -321,6 +321,38 @@ def extrage_avarii_din_text(text_postare):
     return []
 
 
+def trimite_email_html(destinatar, subiect, html):
+    """Trimite un email HTML pe canalul configurat (Gmail SMTP dacă e disponibil —
+    varianta gratuită — altfel Resend). Returnează True DOAR dacă furnizorul a
+    acceptat mesajul. La eșec, apelantul decide dacă reîncearcă mai târziu."""
+    if GMAIL_USER and GMAIL_APP_PASSWORD:
+        return trimite_email_gmail(destinatar, subiect, html)
+
+    if not RESEND_API_KEY:
+        print("⚠️ Niciun canal de email configurat (GMAIL_USER sau RESEND_API_KEY).")
+        return False
+    try:
+        raspuns = requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "from": RESEND_FROM_EMAIL,
+                "to": [destinatar],
+                "subject": subiect,
+                "html": html
+            },
+            timeout=15
+        )
+        if raspuns.status_code >= 200 and raspuns.status_code < 300:
+            return True
+        print(f"⚠️ Resend a refuzat emailul către {destinatar}: {raspuns.status_code} "
+              f"{raspuns.text[:200]} — se va reîncerca la următoarea rulare.")
+        return False
+    except Exception as e:
+        print(f"⚠️ Eroare la trimiterea emailului către {destinatar}: {e} — se va reîncerca.")
+        return False
+
+
 def trimite_email(destinatar, avarie):
     """Trimite emailul. Returnează True DOAR dacă furnizorul a acceptat mesajul
     (Gmail SMTP dacă e configurat — varianta gratuită — altfel Resend).
@@ -351,32 +383,7 @@ def trimite_email(destinatar, avarie):
     )
     subiect = f"🚨 Alertă {eticheta}: {avarie['localitate']} - {status_afisat}"
 
-    if GMAIL_USER and GMAIL_APP_PASSWORD:
-        return trimite_email_gmail(destinatar, subiect, html)
-
-    if not RESEND_API_KEY:
-        print("⚠️ Niciun canal de email configurat (GMAIL_USER sau RESEND_API_KEY).")
-        return False
-    try:
-        raspuns = requests.post(
-            "https://api.resend.com/emails",
-            headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
-            json={
-                "from": RESEND_FROM_EMAIL,
-                "to": [destinatar],
-                "subject": subiect,
-                "html": html
-            },
-            timeout=15
-        )
-        if raspuns.status_code >= 200 and raspuns.status_code < 300:
-            return True
-        print(f"⚠️ Resend a refuzat emailul către {destinatar}: {raspuns.status_code} "
-              f"{raspuns.text[:200]} — se va reîncerca la următoarea rulare.")
-        return False
-    except Exception as e:
-        print(f"⚠️ Eroare la trimiterea emailului către {destinatar}: {e} — se va reîncerca.")
-        return False
+    return trimite_email_html(destinatar, subiect, html)
 
 
 def gaseste_chat_id_telegram(username):
@@ -427,10 +434,10 @@ username).eq("activ", True).limit(1).execute()
     return None
 
 
-def trimite_telegram(contact, avarie):
-    """Trimite mesajul Telegram. Returnează True DOAR dacă Telegram a confirmat
-    livrarea (ok=true). La eșec, notificarea nu se marchează ca trimisă, deci se
-    reîncearcă la următoarea rulare."""
+def trimite_telegram_text(contact, mesaj):
+    """Trimite un text oarecare către un contact Telegram (@username). Returnează
+    True DOAR dacă Telegram a confirmat livrarea (ok=true). La eșec, apelantul
+    decide dacă reîncearcă mai târziu."""
     if not TELEGRAM_BOT_TOKEN:
         print("⚠️ TELEGRAM_BOT_TOKEN lipseste, mesajul nu a fost trimis.")
         return False
@@ -440,29 +447,6 @@ def trimite_telegram(contact, avarie):
               f"Utilizatorul trebuie să pornească botul cu /start.")
         return False
     try:
-        data = avarie.get("data") or "?"
-        serviciu = avarie.get("serviciu") or "apa"
-        eticheta = ETICHETE_SERVICIU.get(serviciu, serviciu)
-        tip = avarie.get("tip_intrerupere")
-        eticheta_tip = "📅 Deconectare programată" if tip == "programata" else "⚡ Întrerupere accidentală"
-        status_afisat = "Programată" if avarie.get("status") == "PROGRAMATA" else avarie.get("status", "?")
-        zona = avarie['strada'] or avarie.get('cartier') or "Toată localitatea"
-        judet = avarie.get("judet") or ""
-        locatie = avarie['localitate']
-        if judet and serviciu == "curent":
-            locatie = f"{avarie['localitate']} (jud. {judet})"
-        data_inceput = avarie.get('data_inceput') or ""
-        data_sfarsit = avarie.get('data_sfarsit') or ""
-        interval = (f"{data_inceput} - {data_sfarsit}").strip(" -")
-        mesaj = (
-            f"🚨 *Alertă {eticheta}*\n"
-            f"*📅 Data: {data}*\n"
-            f"*📍 Locație: {locatie}, {zona}*\n"
-            f"*Status: {status_afisat}*\n"
-            + (f"*Tip: {eticheta_tip}*\n" if tip else "")
-            + f"Interval: {interval}\n"
-            f"{avarie.get('descriere_text', '')}"
-        )
         raspuns = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
             json={"chat_id": chat_id, "text": mesaj, "parse_mode": "Markdown"},
@@ -481,6 +465,36 @@ def trimite_telegram(contact, avarie):
     except Exception as e:
         print(f"⚠️ Eroare la trimiterea mesajului Telegram către {chat_id}: {e} — se va reîncerca.")
         return False
+
+
+def trimite_telegram(contact, avarie):
+    """Trimite mesajul Telegram. Returnează True DOAR dacă Telegram a confirmat
+    livrarea (ok=true). La eșec, notificarea nu se marchează ca trimisă, deci se
+    reîncearcă la următoarea rulare."""
+    data = avarie.get("data") or "?"
+    serviciu = avarie.get("serviciu") or "apa"
+    eticheta = ETICHETE_SERVICIU.get(serviciu, serviciu)
+    tip = avarie.get("tip_intrerupere")
+    eticheta_tip = "📅 Deconectare programată" if tip == "programata" else "⚡ Întrerupere accidentală"
+    status_afisat = "Programată" if avarie.get("status") == "PROGRAMATA" else avarie.get("status", "?")
+    zona = avarie['strada'] or avarie.get('cartier') or "Toată localitatea"
+    judet = avarie.get("judet") or ""
+    locatie = avarie['localitate']
+    if judet and serviciu == "curent":
+        locatie = f"{avarie['localitate']} (jud. {judet})"
+    data_inceput = avarie.get('data_inceput') or ""
+    data_sfarsit = avarie.get('data_sfarsit') or ""
+    interval = (f"{data_inceput} - {data_sfarsit}").strip(" -")
+    mesaj = (
+        f"🚨 *Alertă {eticheta}*\n"
+        f"*📅 Data: {data}*\n"
+        f"*📍 Locație: {locatie}, {zona}*\n"
+        f"*Status: {status_afisat}*\n"
+        + (f"*Tip: {eticheta_tip}*\n" if tip else "")
+        + f"Interval: {interval}\n"
+        f"{avarie.get('descriere_text', '')}"
+    )
+    return trimite_telegram_text(contact, mesaj)
 
 
 # Abonamente care au primit deja notificare pentru un comunicat sursă (în această rulare).
@@ -1360,6 +1374,57 @@ def sincronizeaza_intreruperi_programate():
         print(f"✅ {nr_retrase} anunțuri programate retrase (nu mai apar în PDF).")
 
 
+def trimite_notificare_test(abonament_id):
+    """Trimite o notificare de test către un abonament (folosită din UI prin
+    workflow-ul GitHub cu argumentul --test-notificare). NU înregistrează nimic
+    în notificari_trimise — e doar o verificare a canalului de livrare."""
+    try:
+        rezultat = supabase.table("abonamente").select("*").eq("id", abonament_id).limit(1).execute()
+    except Exception as e:
+        print(f"❌ Eroare la citirea abonamentului {abonament_id}: {e}")
+        return False
+    if not rezultat.data:
+        print(f"❌ Abonamentul {abonament_id} nu există.")
+        return False
+    abonament = rezultat.data[0]
+    if not abonament.get("activ"):
+        print(f"❌ Abonamentul {abonament_id} e inactiv — nu se trimite test.")
+        return False
+
+    serviciu = abonament.get("serviciu") or "apa"
+    eticheta = ETICHETE_SERVICIU.get(serviciu, serviciu)
+    localitate = abonament.get("localitate_interes") or "zona ta"
+    judet = abonament.get("judet") or ""
+    zona = (abonament.get("strada_interes") or abonament.get("cartier_interes")) or "toată localitatea"
+    locatie = localitate + (f", jud. {judet}" if judet else "")
+    tip = abonament.get("tip_contact")
+    contact = abonament.get("valoare_contact")
+
+    print(f"🔔 Trimit notificare de test: {locatie} ({zona}) pe canalul {tip} ({contact})...")
+    if tip == "email":
+        html = (
+            "<p>Salut,</p>"
+            f"<p>Aceasta este o <b>notificare de test</b> de la AquaMonitor CT.</p>"
+            f"<p><b>Abonamentul tău:</b> {eticheta} — {locatie}, {zona}.</p>"
+            "<p>Dacă primești acest email, alertele funcționează corect pentru zona ta. "
+            "Nu trebuie să faci nimic.</p>"
+            "<p style='color:#888;font-size:12px'>AquaMonitor CT — notificări pe zone de interes</p>"
+        )
+        return trimite_email_html(contact, f"🔔 Notificare de test {eticheta} — {localitate}", html)
+
+    if tip == "telegram":
+        mesaj = (
+            "🔔 *Notificare de test* — AquaMonitor CT\n\n"
+            f"Abonamentul tău: {eticheta} — {locatie}, {zona}.\n\n"
+            "Dacă primești acest mesaj, alertele funcționează corect pentru zona ta. "
+            "Nu trebuie să faci nimic."
+        )
+        return trimite_telegram_text(contact, mesaj)
+
+    print(f"❌ Canalul de notificare '{tip}' nu e implementat (doar email și telegram).")
+    return False
+
+
 def ruleaza_scanare():
     curata_avarii_vechi()
 
@@ -1388,4 +1453,7 @@ def ruleaza_scanare():
 
 
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) >= 3 and sys.argv[1] == "--test-notificare":
+        sys.exit(0 if trimite_notificare_test(sys.argv[2]) else 1)
     ruleaza_scanare()

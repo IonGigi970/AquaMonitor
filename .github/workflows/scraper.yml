@@ -7,7 +7,12 @@ on:
     # un serviciu extern (cron-job.org) care apeleaza /api/cron/trigger-scraper si
     # porneste acest workflow prin workflow_dispatch (prioritate normala, fara intarzieri).
     - cron: "0 * * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      notificare_test_abonament:
+        description: "ID-ul abonamentului care primeste o notificare de test (optional). Daca e gol, ruleaza scanarea normala."
+        required: false
+        type: string
 
 jobs:
   scrape:
@@ -34,4 +39,10 @@ jobs:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        run: python scraper.py
+        run: |
+          if [ -n "${{ inputs.notificare_test_abonament }}" ]; then
+            echo "Mod test: trimit notificare de test catre abonamentul ${{ inputs.notificare_test_abonament }}"
+            python scraper.py --test-notificare "${{ inputs.notificare_test_abonament }}"
+          else
+            python scraper.py
+          fi
