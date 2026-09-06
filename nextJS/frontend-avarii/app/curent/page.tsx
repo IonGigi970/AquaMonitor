@@ -32,6 +32,10 @@ function esteRezolvata(a: Intrerupere): boolean {
   return a.status === 'REMEDIAT';
 }
 
+function esteAnulata(a: Intrerupere): boolean {
+  return a.status === 'ANULATA';
+}
+
 function esteProgramata(a: Intrerupere): boolean {
   return a.tip_intrerupere === 'programata';
 }
@@ -65,6 +69,39 @@ function badgeClase(programata: boolean, rezolvata: boolean): string {
 function badgeText(programata: boolean, rezolvata: boolean): string {
   if (rezolvata) return "✅ Rezolvat";
   return programata ? "📅 Programată" : "⚡ Întrerupere";
+}
+
+function CardAnulata({ item }: { item: Intrerupere }) {
+  return (
+    <div className="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-slate-400 opacity-90">
+      <div className="flex items-start justify-between gap-2">
+        <h4 className="font-bold text-slate-700">
+          🚫 {formateazaText(item.localitate)}
+        </h4>
+        {item.judet && (
+          <span className="shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+            {item.judet}
+          </span>
+        )}
+      </div>
+      {item.data_inceput && (
+        <p className="text-xs text-slate-500 mt-1.5">
+          📅 Fusese programată: {etichetaData(item.data_inceput)}
+          {item.data_sfarsit && (
+            <span className="text-slate-400 font-semibold">
+              {" "}– {item.data_sfarsit.split(" ")[1] || ""}
+            </span>
+          )}
+        </p>
+      )}
+      <p className="text-xs font-bold text-slate-600 mt-1">
+        🔕 Anunțul a fost retras de operator — întreruperea NU mai are loc.
+      </p>
+      {item.detalii_anunt && (
+        <p className="text-xs text-slate-500 mt-1 leading-relaxed line-clamp-2">{item.detalii_anunt}</p>
+      )}
+    </div>
+  );
 }
 
 function CardAccidentala({ item }: { item: Intrerupere }) {
@@ -142,12 +179,19 @@ export default function CurentPage() {
   const programate = useMemo(
     () =>
       intreruperi
-        .filter((i) => esteProgramata(i) && !esteRezolvata(i))
+        .filter((i) => esteProgramata(i) && !esteRezolvata(i) && !esteAnulata(i))
         .sort((a, b) => (a.data_inceput || "").localeCompare(b.data_inceput || "")),
     [intreruperi]
   );
   const accidentale = useMemo(
-    () => intreruperi.filter((i) => !esteProgramata(i) && !esteRezolvata(i)),
+    () => intreruperi.filter((i) => !esteProgramata(i) && !esteRezolvata(i) && !esteAnulata(i)),
+    [intreruperi]
+  );
+  const anulate = useMemo(
+    () =>
+      intreruperi
+        .filter((i) => esteAnulata(i))
+        .sort((a, b) => (a.data_inceput || "").localeCompare(b.data_inceput || "")),
     [intreruperi]
   );
   const rezolvate = useMemo(
@@ -367,8 +411,24 @@ export default function CurentPage() {
                     </section>
                   )}
 
-                  {programate.length === 0 && accidentale.length === 0 && (
+                  {programate.length === 0 && accidentale.length === 0 && anulate.length === 0 && (
                     <p className="text-slate-500">Nu există întreruperi în curs sau programate.</p>
+                  )}
+
+                  {anulate.length > 0 && (
+                    <section className="flex flex-col gap-3">
+                      <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">
+                        🚫 Anunțuri retrase de operator
+                        <span className="normal-case font-semibold text-slate-400 text-xs">
+                          ({anulate.length})
+                        </span>
+                      </h3>
+                      <div className="flex flex-col gap-3 max-h-[400px] overflow-y-auto pr-1">
+                        {anulate.map((item, index) => (
+                          <CardAnulata key={item.id || `an-${index}`} item={item} />
+                        ))}
+                      </div>
+                    </section>
                   )}
 
                   {rezolvate.length > 0 && (
