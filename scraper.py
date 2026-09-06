@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 import google.generativeai as genai
 from bs4 import BeautifulSoup
-from pypdf import PdfReader
+import pdfplumber
 
 load_dotenv()
 
@@ -326,6 +326,10 @@ def trimite_email(destinatar, avarie):
     data = avarie.get("data") or ""
     serviciu = avarie.get("serviciu") or "apa"
     eticheta = ETICHETE_SERVICIU.get(serviciu, serviciu)
+    judet = avarie.get("judet") or ""
+    locatie = avarie['localitate']
+    if judet and serviciu == "curent":
+        locatie = f"{avarie['localitate']} (județul {judet})"
     tip = avarie.get("tip_intrerupere")
     eticheta_tip = "📅 Deconectare programată" if tip == "programata" else "⚡ Întrerupere accidentală"
     status_afisat = "Programată" if avarie.get("status") == "PROGRAMATA" else avarie.get("status", "?")
@@ -334,7 +338,7 @@ def trimite_email(destinatar, avarie):
     interval = (f"{data_inceput} - {data_sfarsit}").strip(" -") or ""
     html = (
         f"<p><b>📅 Data: {data}</b></p>"
-        f"<p><b>📍 Locație: {avarie['localitate']}, {avarie['strada']}</b></p>"
+        f"<p><b>📍 Locație: {locatie}, {avarie['strada']}</b></p>"
         f"<p><b>Status: {status_afisat}</b></p>"
         f"<p><b>⚡ Serviciu: {eticheta}</b></p>"
         + (f"<p><b>Tip: {eticheta_tip}</b></p>" if tip else "")
@@ -440,13 +444,17 @@ def trimite_telegram(contact, avarie):
         eticheta_tip = "📅 Deconectare programată" if tip == "programata" else "⚡ Întrerupere accidentală"
         status_afisat = "Programată" if avarie.get("status") == "PROGRAMATA" else avarie.get("status", "?")
         zona = avarie['strada'] or avarie.get('cartier') or "Toată localitatea"
+        judet = avarie.get("judet") or ""
+        locatie = avarie['localitate']
+        if judet and serviciu == "curent":
+            locatie = f"{avarie['localitate']} (jud. {judet})"
         data_inceput = avarie.get('data_inceput') or ""
         data_sfarsit = avarie.get('data_sfarsit') or ""
         interval = (f"{data_inceput} - {data_sfarsit}").strip(" -")
         mesaj = (
             f"🚨 *Alertă {eticheta}*\n"
             f"*📅 Data: {data}*\n"
-            f"*📍 Locație: {avarie['localitate']}, {zona}*\n"
+            f"*📍 Locație: {locatie}, {zona}*\n"
             f"*Status: {status_afisat}*\n"
             + (f"*Tip: {eticheta_tip}*\n" if tip else "")
             + f"Interval: {interval}\n"
@@ -759,7 +767,7 @@ def reincearca_notificari_esuate():
     din notificari_pe_sursa garantează că nimeni nu primește de două ori aceeași
     alertă."""
     azi_str = azi_bucuresti().isoformat()
-    selecteaza = "id,serviciu,localitate,strada,cartier,status,descriere_text,data_inceput,data_sfarsit,data,sursa_url,tip_intrerupere"
+    selecteaza = "id,serviciu,localitate,strada,cartier,status,descriere_text,data_inceput,data_sfarsit,data,sursa_url,tip_intrerupere,judet"
     avarii_de_reluat = []
     try:
         # Avarii apă publicate azi
@@ -821,34 +829,64 @@ def _localitati_recunoscute_curent():
     return nume
 
 
-def mapeaza_zona_intrerupere(desc_norm, localitati):
+# Nume canonice (cu diacritice) pentru județele Rețele Electrice — ArcGIS le trimite
+# cu litere mari și fără diacritice; PDF-ul le are deja corecte.
+JUDETE_CANONICE = {
+    "ARAD": "Arad", "CARAS-SEVERIN": "Caraș-Severin", "CARAȘ-SEVERIN": "Caraș-Severin",
+    "HUNEDOARA": "Hunedoara", "TIMIS": "Timiș", "TIMIȘ": "Timiș",
+    "CONSTANTA": "Constanța", "TULCEA": "Tulcea", "IALOMITA": "Ialomița",
+    "IALOMIȚA": "Ialomița", "CALARASI": "Călărași", "CĂLĂRAȘI": "Călărași",
+    "GIURGIU": "Giurgiu", "ILFOV": "Ilfov", "BUCURESTI": "București",
+    "BUCUREȘTI": "București", "TELEORMAN": "Teleorman", "PRAHOVA": "Prahova",
+    "DAMBOVITA": "Dâmbovița", "DÂMBOVIȚA": "Dâmbovița",
+}
+
+
+def judet_canonizat(nume):
+    """Normalizează numele unui județ la forma cu diacritice (ex: CONSTANTA → Constanța)."""
+    if not nume:
+        return ""
+    curat = re.sub(r"[\s\d]+$", "", str(nume)).strip()
+    return JUDETE_CANONICE.get(curat.upper(), curat)
+
+
+def mapeaza_zona_intrerupere(desc_norm, provincia_norm, localitati):
     """Atribuie (localitate, cartier) dintr-o zonă anunțată de Rețele Electrice.
 
+    Funcționează pentru toate județele:
     - "NAVODARI" → (navodari, "")
     - "MEDGIDIA ZONA PORT" → (medgidia, "zona port")
-    - "PALAS" (zonă dintr-un oraș mare, fără numele lui) → (constanta, "palas")
+    - "PALAS" (zonă din Constanța fără numele orașului) → (constanta, "palas")
+    - "TIMISOARA" / "TIMISOARA CETATE" → (timisoara, ""/"cetate")
     """
     if not desc_norm:
-        return "constanta", ""
+        return provincia_norm, ""
+    if desc_norm == provincia_norm:
+        return provincia_norm, ""
+    cuvinte = desc_norm.split()
     if desc_norm in localitati:
         return desc_norm, ""
-    cuvinte = desc_norm.split()
     if cuvinte and cuvinte[0] in localitati:
         return cuvinte[0], " ".join(cuvinte[1:]).strip()
-    return "constanta", desc_norm
+    if provincia_norm == "constanta":
+        # Cartiere/zone din municipiul Constanța anunțate fără numele orașului
+        return "constanta", desc_norm
+    # În alte județe descrizion începe de regulă cu numele localității
+    return cuvinte[0], " ".join(cuvinte[1:]).strip()
 
 
-def descriere_intrerupere(attr, desc_raw, tip):
+def descriere_intrerupere(attr, desc_raw, tip, judet):
     """Text descriptiv dintr-un rând ArcGIS (fără date personale).
 
     tip: "accidentala" (avarie în rețea) sau "programata" (deconectare planificată).
     """
+    prefix = f", județul {judet}" if judet else ""
     if tip == "programata":
         text = (f"Deconectare programată de energie electrică (lucrări în rețea), "
-                f"anunțată în zona: {desc_raw}.")
+                f"anunțată în zona: {desc_raw}{prefix}.")
     else:
         text = (f"Întrerupere neplanificată de energie electrică (avarie în rețea), "
-                f"anunțată în zona: {desc_raw}.")
+                f"anunțată în zona: {desc_raw}{prefix}.")
     clienti = attr.get("num_cli_di")
     if clienti:
         text += f" Clienți afectați: {clienti}."
@@ -862,16 +900,15 @@ def descriere_intrerupere(attr, desc_raw, tip):
 
 
 def sincronizeaza_intreruperi_curent():
-    """Sincronizează întreruperile de energie electrică din județul Constanța.
+    """Sincronizează întreruperile ACCIDENTALE de energie electrică din toate județele.
 
-    API-ul listează întreruperile încă active, atât accidentale (causa_disa='Accidental')
-    cât și planificate (causa_disa='Planificat'). Cele noi se inserează și declanșează
-    notificări; cele care dispar din feed se marchează REZOLVATE (rămân vizibile în
-    istoricul scurt, apoi sunt șterse după 2 zile)."""
-    print("⚡ Verific întreruperile de energie electrică (Rețele Electrice)...")
+    API-ul listează întreruperile încă active (toate provinciile Rețele Electrice).
+    Deconectările programate se iau separat, din PDF-ul săptămânal, ca să nu existe
+    dubluri. Cele care dispar din feed se marchează REZOLVATE."""
+    print("⚡ Verific întreruperile accidentale de energie electrică (toate județele)...")
     try:
         raspuns = requests.get(ARCGIS_INTRERUPERI_URL, params={
-            "where": "provincia='CONSTANTA'",
+            "where": "causa_disa='Accidental'",
             "outFields": "*", "f": "json", "resultRecordCount": "2000",
         }, headers={"User-Agent": "Mozilla/5.0"}, timeout=25)
         if raspuns.status_code != 200:
@@ -891,10 +928,11 @@ def sincronizeaza_intreruperi_curent():
         if not cod:
             continue
         coduri_active.add(cod)
-        causa = (attr.get("causa_disa") or "").strip().lower()
-        tip = "programata" if causa == "planificat" else "accidentala"
+        provincia = (attr.get("provincia") or "").strip()
+        judet = judet_canonizat(provincia)
         desc_raw = (attr.get("descrizion") or "").strip()
-        localitate, cartier = mapeaza_zona_intrerupere(normalizeaza_text(desc_raw), localitati)
+        localitate, cartier = mapeaza_zona_intrerupere(
+            normalizeaza_text(desc_raw), normalizeaza_text(provincia), localitati)
         data_inceput = (attr.get("data_inter") or "").strip()
         data_sfarsit = (attr.get("data_prev_") or "").strip()
         data_zi = None
@@ -904,10 +942,10 @@ def sincronizeaza_intreruperi_curent():
             pass
         intrari.append({
             "cod": cod,
-            "tip": tip,
+            "judet": judet,
             "localitate": localitate,
             "cartier": cartier,
-            "descriere": descriere_intrerupere(attr, desc_raw, tip),
+            "descriere": descriere_intrerupere(attr, desc_raw, "accidentala", judet),
             "data": data_zi,
             "data_inceput": data_inceput,
             "data_sfarsit": data_sfarsit,
@@ -931,32 +969,34 @@ def sincronizeaza_intreruperi_curent():
             if rand and rand.get("status") != "REMEDIAT":
                 # Deja activă în baza noastră: actualizăm datele curente
                 supabase.table("avarii").update({
+                    "judet": e["judet"],
                     "latitudine": e["lat"], "longitudine": e["lon"],
                     "data_inceput": e["data_inceput"], "data_sfarsit": e["data_sfarsit"],
-                    "descriere_text": e["descriere"], "tip_intrerupere": e["tip"],
+                    "descriere_text": e["descriere"], "tip_intrerupere": "accidentala",
                 }).eq("id", rand["id"]).execute()
             elif rand:
                 # A reapărut după rezolvare: o reactivăm
                 supabase.table("avarii").update({
                     "status": "AVARIE", "data_sfarsit": e["data_sfarsit"],
+                    "judet": e["judet"],
                     "latitudine": e["lat"], "longitudine": e["lon"],
                     "data_inceput": e["data_inceput"], "descriere_text": e["descriere"],
-                    "tip_intrerupere": e["tip"],
+                    "tip_intrerupere": "accidentala",
                 }).eq("id", rand["id"]).execute()
                 print(f"⚡ Reapariție întrerupere {e['cod']} ({e['localitate']} {e['cartier']}).")
             else:
                 inserat = supabase.table("avarii").insert({
                     "serviciu": "curent", "status": "AVARIE",
+                    "judet": e["judet"],
                     "localitate": e["localitate"], "strada": "", "cartier": e["cartier"],
                     "data": e["data"], "data_inceput": e["data_inceput"],
                     "data_sfarsit": e["data_sfarsit"],
-                    "descriere_text": e["descriere"], "tip_intrerupere": e["tip"],
+                    "descriere_text": e["descriere"], "tip_intrerupere": "accidentala",
                     "latitudine": e["lat"], "longitudine": e["lon"],
                     "sursa_url": f"retele:{e['cod']}",
                 }).execute()
-                eticheta_tip = "programată" if e["tip"] == "programata" else "accidentală"
-                print(f"⚡ Întrerupere NOUĂ de energie electrică ({eticheta_tip}): "
-                      f"{e['localitate']} {e['cartier']} ({e['cod']}).")
+                print(f"⚡ Întrerupere NOUĂ de energie electrică (accidentală): "
+                      f"{e['localitate']} {e['cartier']} ({e['judet']}, {e['cod']}).")
                 if inserat.data:
                     notifica_abonatii(inserat.data[0])
         except Exception as ex:
@@ -980,28 +1020,31 @@ def sincronizeaza_intreruperi_curent():
 
 # ---------------------------------------------------------------------------
 # Curent electric: deconectări PROGRAMATE (viitoare) din PDF-ul săptămânal
-# publicat de Rețele Electrice. API-ul ArcGIS conține doar întreruperile deja
-# active; anunțurile pentru zilele următoare există doar în PDF.
+# publicat de Rețele Electrice (TOATE județele). API-ul ArcGIS conține doar
+# întreruperile deja active; anunțurile viitoare există doar în PDF, pe care
+# îl descărcăm cu pdfplumber (citește corect textul așezat pe coloane).
 # ---------------------------------------------------------------------------
 PAGINA_PDF_INTRERUPERI = "https://www.reteleelectrice.ro/en/outages/planned/"
 UA_BROWSER = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
 
-# Nume de localități/orice alt județ care apar în textul PDF când extract_text
-# amestecă coloanele la granițele paginilor — semn că rândul NU e din Constanța.
-CONTAMINARI_PDF = ("arad", "timisoara", "timiș", "resita", "resița", "caras",
-                   "hunedoara", "deva", "giurgiu", "calarasi", "călărași",
-                   "ialomita", "ialomița", "slobozia", "tulcea", "bucuresti",
-                   "bucurești", "ilfov", "bolvasnita", "bolvașnița", "mehadia",
-                   "garbovat", "gârbovăț", "putna", "câlnic", "calnic",
-                   "strugasca", "socol", "sumita", "șumița", "sectorul",
-                   "ziua / data", "pagina")
-
 ZIUA_SAPTAMANII = r"(Luni|Marți|Miercuri|Joi|Vineri|Sâmbătă|Duminică)"
+
+# Cuvinte care fac parte din localități compuse ("Zorlențu Mare", "Vama Veche",
+# "Petru Rareș") și rămân uneori la începutul detaliilor după tăierea localității
+# (normalizate, fără diacritice).
+ATASABILE_LOCALITATII = {
+    "mare", "mic", "veche", "noua", "nou", "vechi", "rares", "pitarului",
+    "barzii", "copaceni", "boinei", "de sus", "de jos", "de mijloc",
+}
 
 
 def descarca_pdf_intreruperi_programate():
-    """Descarcă PDF-ul săptămânii curente și întoarce textul extras (sau None)."""
+    """Descarcă PDF-ul săptămânal cel mai recent publicat și întoarce textul extras.
+
+    Se alege PDF-ul cu cea mai mare dată de sfârșit: dacă Rețele Electrice a
+    publicat deja săptămâna viitoare (de regulă vinerea), îl luăm pe acela, ca
+    anunțurile noi să apară în aplicație cât mai devreme."""
     try:
         pagina = requests.get(PAGINA_PDF_INTRERUPERI,
                               headers={"User-Agent": UA_BROWSER, "Accept": "text/html"},
@@ -1013,20 +1056,22 @@ def descarca_pdf_intreruperi_programate():
         print(f"⚠️ Eroare la descărcarea paginii de programate: {e}")
         return None
 
-    azi = azi_bucuresti()
     url_pdf = None
+    end_max = None
     for m in re.finditer(
             r'href="([^"]*outageapp_pdf/Intreruperi%20programate%20'
             r'(\d{2})\.(\d{2})\.(\d{4})%20-%20(\d{2})\.(\d{2})\.(\d{4})\.pdf[^"]*)"',
             pagina.text):
         url = m.group(1).replace("&amp;", "&")
-        start = date(int(m.group(4)), int(m.group(3)), int(m.group(2)))
-        end = date(int(m.group(7)), int(m.group(6)), int(m.group(5)))
-        if start <= azi <= end:
+        try:
+            end = date(int(m.group(7)), int(m.group(6)), int(m.group(5)))
+        except Exception:
+            continue
+        if end_max is None or end > end_max:
+            end_max = end
             url_pdf = url
-            break
     if not url_pdf:
-        print("⚠️ Nu am găsit PDF-ul săptămânii curente pe pagina de programate.")
+        print("⚠️ Nu am găsit niciun PDF de programate pe pagina oficială.")
         return None
 
     try:
@@ -1034,8 +1079,13 @@ def descarca_pdf_intreruperi_programate():
         if pdf.status_code != 200:
             print(f"⚠️ PDF-ul a răspuns {pdf.status_code}.")
             return None
-        cititor = PdfReader(BytesIO(pdf.content))
-        text = "\n".join((p.extract_text() or "") for p in cititor.pages)
+        with pdfplumber.open(BytesIO(pdf.content)) as cititor:
+            # Pagina 1 (index 0) = titlu + cuprins; rândurile încep de la pagina 2.
+            text = "\n".join((p.extract_text() or "") for p in cititor.pages[1:])
+        # Diacriticele din fonturile PDF-ului vin uneori cu forme vechi (ã, ş, ţ)
+        text = (text.replace("ã", "ă").replace("Ã", "Ă")
+                    .replace("ş", "ș").replace("Ş", "Ș")
+                    .replace("ţ", "ț").replace("Ţ", "Ț"))
         return text if text.strip() else None
     except Exception as e:
         print(f"⚠️ Eroare la descărcarea/parsarea PDF-ului: {e}")
@@ -1043,63 +1093,136 @@ def descarca_pdf_intreruperi_programate():
 
 
 def parseaza_intreruperi_programate(text_pdf):
-    """Extrage din PDF deconectările programate pentru localitățile din Constanța.
+    """Extrage din PDF deconectările programate, grupate pe județe.
 
-    Returnează o listă de dicturi cu: data_zi (date), localitate, detalii, orar.
-    """
-    capete = list(re.finditer(
-        r"(?:^|\n)\s*\d*\s*" + ZIUA_SAPTAMANII + r"\s*,\s*(\d{1,2})\.(\d{1,2})\.(\d{4})",
-        text_pdf))
-    localitati = {normalizeaza_text(x) for x in LOCALITATI_CONSTANTA}
+    Returnează o listă de dicturi cu: data_zi, judet, localitate, detalii,
+    ora_inceput, ora_sfarsit."""
+    localitati_ct = {normalizeaza_text(x) for x in LOCALITATI_CONSTANTA}
+    antet_jud = re.compile(r"^(?:Județul|Judeţul)\s+(.+)$")
+    antet_buc = re.compile(r"^București\s*$")
+    cap_rand = re.compile(r"^" + ZIUA_SAPTAMANII + r",")
+    data_re = re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{4})")
+    orar_re = re.compile(r"(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})")
+    inceput_tabel = re.compile(r"^(Ziua|Orar|Localitatea|Strada|Biroul|www\.|Pagina)")
+
+    judet_curent = ""
     intrari = []
-    for i, m in enumerate(capete):
-        start = m.end()
-        end = capete[i + 1].start() if i + 1 < len(capete) else len(text_pdf)
-        corp = re.sub(r"\s+", " ", text_pdf[start:end]).strip()
-        orar = re.search(r"(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})\s*$", corp)
-        if not orar:
+    linii = text_pdf.splitlines()
+    i = 0
+    while i < len(linii):
+        linie = linii[i].strip()
+        if not linie:
+            i += 1
             continue
-        corp = corp[:orar.start()].strip()
-        ora_inc, ora_sf = orar.group(1), orar.group(2)
-        localitate = None
-        for cuv in corp.split():
-            c = normalizeaza_text(cuv.strip(",;:"))
-            if c in localitati:
-                localitate = cuv.strip(",;:")
+        m_ant = antet_jud.match(linie)
+        if m_ant:
+            judet_curent = judet_canonizat(m_ant.group(1).strip())
+            i += 1
+            continue
+        if antet_buc.match(linie):
+            judet_curent = "București"
+            i += 1
+            continue
+        if inceput_tabel.match(linie):
+            i += 1
+            continue
+        if not cap_rand.match(linie):
+            i += 1
+            continue
+
+        # Rând nou (începe cu ziua săptămânii): adunăm liniile următoare
+        # până la următorul rând/antet, apoi curățăm fragmentele intercalate.
+        bucati = [linie]
+        j = i + 1
+        while j < len(linii):
+            urm = linii[j].strip()
+            if not urm:
+                j += 1
+                continue
+            if (cap_rand.match(urm) or antet_jud.match(urm)
+                    or antet_buc.match(urm) or inceput_tabel.match(urm)):
                 break
-        if not localitate:
-            continue
-        detalii = corp.replace(localitate, "", 1).strip()
-        detalii_norm = normalizeaza_text(detalii)
-        if any(c in detalii_norm for c in CONTAMINARI_PDF):
+            bucati.append(urm)
+            j += 1
+        corp = " ".join(bucati)
+        m_data = data_re.search(corp)
+        if not m_data:
+            i = j
             continue
         try:
-            zi = date(int(m.group(4)), int(m.group(3)), int(m.group(2)))
+            zi = date(int(m_data.group(3)), int(m_data.group(2)), int(m_data.group(1)))
         except Exception:
+            i = j
+            continue
+        m_orar = orar_re.search(corp)
+        ora_inc = m_orar.group(1) if m_orar else ""
+        ora_sf = m_orar.group(2) if m_orar else ""
+        if not ora_inc or not ora_sf:
+            i = j
+            continue
+
+        ramas = re.sub(r"^" + ZIUA_SAPTAMANII + r",", "", corp)
+        cuvinte = []
+        for c in re.split(r"\s+", ramas):
+            cc = c.strip(" ,;.|")
+            if not cc:
+                continue
+            if data_re.fullmatch(cc):
+                continue
+            if re.fullmatch(r"\d{1,2}:\d{2}", cc) or cc in ("-", "–", "—"):
+                continue
+            cuvinte.append(cc)
+        if not cuvinte:
+            i = j
+            continue
+
+        # Localitatea: compus cunoscut (Constanța) sau primul cuvânt
+        k = 1
+        if len(cuvinte) >= 2 and normalizeaza_text(cuvinte[0] + " " + cuvinte[1]) in localitati_ct:
+            k = 2
+        localitate = normalizeaza_text(" ".join(cuvinte[:k]))
+        detalii_cuv = cuvinte[k:]
+        if detalii_cuv:
+            primul = normalizeaza_text(detalii_cuv[0])
+            if primul in ATASABILE_LOCALITATII and primul not in ("de sus", "de jos", "de mijloc"):
+                localitate += " " + primul
+                detalii_cuv = detalii_cuv[1:]
+            elif len(detalii_cuv) >= 2 and primul == "de":
+                al2 = normalizeaza_text(detalii_cuv[1])
+                if al2 in ("sus", "jos", "mijloc"):
+                    localitate += " de " + al2
+                    detalii_cuv = detalii_cuv[2:]
+        detalii = " ".join(detalii_cuv).strip(" ,;|")
+        if not localitate or not judet_curent:
+            i = j
             continue
         intrari.append({
             "data_zi": zi,
-            "localitate": normalizeaza_text(localitate),
-            "detalii": detalii[:300],
+            "judet": judet_curent,
+            "localitate": localitate,
+            "detalii": detalii[:400],
             "ora_inceput": ora_inc,
             "ora_sfarsit": ora_sf,
         })
+        i = j
     return intrari
 
 
 def sincronizeaza_intreruperi_programate():
-    """Sincronizează deconectările PROGRAMATE (viitoare) din PDF-ul săptămânal.
+    """Sincronizează deconectările PROGRAMATE din PDF-ul săptămânal (toate județele).
 
-    PDF-ul săptămânii se procesează o singură dată (la prima rulare care îl vede):
-    dacă există deja anunțuri pentru azi+viitor în baza noastră, sărim peste
-    descărcare. Rândurile ale căror dată a trecut se marchează REZOLVATE.
-    """
+    La fiecare rulare:
+    1. rândurile a căror zi a trecut se marchează REZOLVATE (rămân afișate până
+       la sfârșitul zilei incluse, apoi dispar din lista activă);
+    2. se descarcă și parsează cel mai recent PDF publicat și se face
+       reconciliere: anunțuri noi → inserare + notificare, anunțuri retrase
+       din PDF → REZOLVATE."""
     azi = azi_bucuresti()
     acum = datetime.now(ZoneInfo("Europe/Bucharest"))
 
     try:
         rez = supabase.table("avarii").select(
-            "id,sursa_url,status,data_inceput"
+            "id,sursa_url,status,data_inceput,data_sfarsit,descriere_text"
         ).eq("serviciu", "curent").execute()
     except Exception as e:
         print(f"⚠️ Eroare la citirea deconectărilor programate: {e}")
@@ -1111,14 +1234,14 @@ def sincronizeaza_intreruperi_programate():
         if u.startswith("pdfprog:"):
             pdf_randuri[u[len("pdfprog:"):]] = r
 
-    # 1. Deconectările a căror zi a trecut se închid (nu mai sunt de actualitate).
+    # 1. Deconectările a căror zi a trecut se închid.
     for cod, r in pdf_randuri.items():
         di = (r.get("data_inceput") or "").split()
         try:
             zi = datetime.strptime(di[0], "%d/%m/%Y").date()
         except Exception:
             continue
-        if zi < azi:
+        if zi < azi and r.get("status") != "REMEDIAT":
             try:
                 supabase.table("avarii").update(
                     {"status": "REMEDIAT", "data_sfarsit": acum.strftime("%d/%m/%Y %H:%M")}
@@ -1127,29 +1250,20 @@ def sincronizeaza_intreruperi_programate():
             except Exception as ex:
                 print(f"❌ Eroare la închiderea {cod}: {ex}")
 
-    # 2. Dacă avem deja anunțuri pentru azi+viitor, săptămâna e procesată.
-    for r in pdf_randuri.values():
-        di = (r.get("data_inceput") or "").split()
-        try:
-            zi = datetime.strptime(di[0], "%d/%m/%Y").date()
-        except Exception:
-            continue
-        if zi >= azi:
-            return
-
-    # 3. Prima procesare a săptămânii: descarcă + parsează PDF-ul curent.
+    # 2. Descarcă și parsează cel mai recent PDF publicat.
     print("📄 Verific deconectările programate (PDF săptămânal Rețele Electrice)...")
     text_pdf = descarca_pdf_intreruperi_programate()
     if not text_pdf:
         return
     intrari = parseaza_intreruperi_programate(text_pdf)
     if not intrari:
-        print("ℹ️ PDF-ul nu conține deconectări programate pentru Constanța.")
+        print("ℹ️ PDF-ul nu conține deconectări programate (sau nu a putut fi citit).")
         return
     print(f"📄 Am găsit {len(intrari)} deconectări programate în PDF.")
 
+    coduri_in_pdf = set()
     for e in intrari:
-        if e["data_zi"] < azi:
+        if e["data_zi"] < azi or not e["judet"]:
             continue
         ora_inc, ora_sf = e["ora_inceput"], e["ora_sfarsit"]
         data_inceput = f"{e['data_zi']:%d/%m/%Y} {ora_inc}"
@@ -1157,21 +1271,28 @@ def sincronizeaza_intreruperi_programate():
         if ora_sf <= ora_inc:
             data_sfarsit_zi += timedelta(days=1)
         data_sfarsit = f"{data_sfarsit_zi:%d/%m/%Y} {ora_sf}"
-        detalii = re.sub(r"\s+", " ", e["detalii"]).strip(" ,;")
+        detalii = re.sub(r"\s+", " ", e["detalii"]).strip(" ,;|")
         descriere = (f"Deconectare programată de energie electrică (lucrări în rețea), "
-                     f"anunțată pentru {e['localitate']}: {detalii}.")
-        cheie_raw = f"{e['data_zi']:%d/%m/%Y}|{e['localitate']}|{detalii}"
+                     f"anunțată pentru {e['localitate']}, județul {e['judet']}: {detalii}.")
+        cheie_raw = f"{e['data_zi']:%d/%m/%Y}|{e['localitate']}|{ora_inc}|{ora_sf}"
         cod = hashlib.md5(cheie_raw.encode("utf-8")).hexdigest()[:12]
+        coduri_in_pdf.add(cod)
         rand = pdf_randuri.get(cod)
         try:
             if rand and rand.get("status") != "REMEDIAT":
-                supabase.table("avarii").update({
-                    "descriere_text": descriere,
-                    "data_inceput": data_inceput,
-                    "data_sfarsit": data_sfarsit,
-                    "data": e["data_zi"].isoformat(),
-                }).eq("id", rand["id"]).execute()
+                # Deja în baza noastră: actualizăm doar dacă s-a schimbat ceva
+                schimbat = (rand.get("descriere_text") != descriere
+                            or rand.get("data_inceput") != data_inceput
+                            or rand.get("data_sfarsit") != data_sfarsit)
+                if schimbat:
+                    supabase.table("avarii").update({
+                        "descriere_text": descriere,
+                        "data_inceput": data_inceput,
+                        "data_sfarsit": data_sfarsit,
+                        "data": e["data_zi"].isoformat(),
+                    }).eq("id", rand["id"]).execute()
             elif rand:
+                # A reapărut după ce fusese închisă: reactivăm
                 supabase.table("avarii").update({
                     "status": "PROGRAMATA",
                     "descriere_text": descriere,
@@ -1184,18 +1305,41 @@ def sincronizeaza_intreruperi_programate():
                 inserat = supabase.table("avarii").insert({
                     "serviciu": "curent", "status": "PROGRAMATA",
                     "tip_intrerupere": "programata",
+                    "judet": e["judet"],
                     "localitate": e["localitate"], "strada": "", "cartier": "",
                     "data": e["data_zi"].isoformat(),
                     "data_inceput": data_inceput, "data_sfarsit": data_sfarsit,
                     "descriere_text": descriere,
+                    "detalii_anunt": detalii,
                     "sursa_url": f"pdfprog:{cod}",
                 }).execute()
                 print(f"📅 Deconectare programată NOUĂ: {e['localitate']} "
-                      f"({e['data_zi']:%d.%m.%Y}, {ora_inc}-{ora_sf}).")
+                      f"({e['judet']}, {e['data_zi']:%d.%m.%Y}, {ora_inc}-{ora_sf}).")
                 if inserat.data:
                     notifica_abonatii(inserat.data[0])
         except Exception as ex:
             print(f"❌ Eroare la salvarea deconectării {cod}: {ex}")
+
+    # 3. Anunțurile active (azi+viitor) care nu mai apar în PDF au fost retrase.
+    nr_retrase = 0
+    for cod, r in pdf_randuri.items():
+        if cod in coduri_in_pdf:
+            continue
+        di = (r.get("data_inceput") or "").split()
+        try:
+            zi = datetime.strptime(di[0], "%d/%m/%Y").date()
+        except Exception:
+            continue
+        if zi >= azi and r.get("status") != "REMEDIAT":
+            try:
+                supabase.table("avarii").update(
+                    {"status": "REMEDIAT", "data_sfarsit": acum.strftime("%d/%m/%Y %H:%M")}
+                ).eq("id", r["id"]).execute()
+                nr_retrase += 1
+            except Exception as ex:
+                print(f"❌ Eroare la retragerea {cod}: {ex}")
+    if nr_retrase:
+        print(f"✅ {nr_retrase} anunțuri programate retrase (nu mai apar în PDF).")
 
 
 def ruleaza_scanare():
