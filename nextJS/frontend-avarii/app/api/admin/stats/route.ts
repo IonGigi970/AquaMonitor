@@ -27,33 +27,22 @@ export async function GET(request: Request) {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // "Avarii active" = avariile zilei curente (fusul orar al României),
-    // aceleași ca cele afișate pe site.
-    const aziStr = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Bucharest",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
-
     const [
-      avariiActive,
-      avariiTotal,
       abonamenteActive,
       abonamenteEmail,
       abonamenteTelegram,
       telegramUsers,
-      notificariTrimise,
-      utilizatori,
+      abonamenteListaRaw,
     ] = await Promise.all([
-      supabase.from('avarii').select('id', { count: 'exact', head: true }).eq('data', aziStr).neq('status', 'REMEDIAT'),
-      supabase.from('avarii').select('id', { count: 'exact', head: true }),
       supabase.from('abonamente').select('id', { count: 'exact', head: true }).eq('activ', true),
       supabase.from('abonamente').select('id', { count: 'exact', head: true }).eq('activ', true).eq('tip_contact', 'email'),
       supabase.from('abonamente').select('valoare_contact', { count: 'exact' }).eq('activ', true).eq('tip_contact', 'telegram'),
       supabase.from('telegram_users').select('username', { count: 'exact' }),
-      supabase.from('notificari_trimise').select('id', { count: 'exact', head: true }),
-      supabase.auth.admin.listUsers({ perPage: 1000 }),
+      supabase
+        .from('abonamente')
+        .select('id, tip_contact, valoare_contact, serviciu, judet, localitate_interes, strada_interes, cartier_interes')
+        .eq('activ', true)
+        .order('valoare_contact', { ascending: true }),
     ]);
 
     const telegramUsernamesConfirmate = new Set(
@@ -65,52 +54,36 @@ export async function GET(request: Request) {
         !telegramUsernamesConfirmate.has((a.valoare_contact || '').replace(/^@/, '').toLowerCase())
     ).length;
 
-    // Distribuție avarii active pe status
-    const { data: avariiPeStatus } = await supabase
-      .from('avarii')
-      .select('status')
-      .eq('data', aziStr)
-      .neq('status', 'REMEDIAT');
-    const distributieStatus: Record<string, number> = {};
-    (avariiPeStatus ?? []).forEach((a: { status: string }) => {
-      distributieStatus[a.status] = (distributieStatus[a.status] || 0) + 1;
-    });
-
-    // Distribuție avarii active pe localitate (top 5)
-    const { data: avariiPeLocalitate } = await supabase
-      .from('avarii')
-      .select('localitate')
-      .eq('data', aziStr)
-      .neq('status', 'REMEDIAT');
-    const distributieLocalitate: Record<string, number> = {};
-    (avariiPeLocalitate ?? []).forEach((a: { localitate: string }) => {
-      distributieLocalitate[a.localitate] = (distributieLocalitate[a.localitate] || 0) + 1;
-    });
-    const topLocalitati = Object.entries(distributieLocalitate)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
+    const abonamentiLista = (abonamenteListaRaw.data ?? []).map((a: {
+      id: string;
+      tip_contact: string;
+      valoare_contact: string;
+      serviciu: string | null;
+      judet: string | null;
+      localitate_interes: string;
+      strada_interes: string | null;
+      cartier_interes: string | null;
+    }) => ({
+      id: a.id,
+      tipContact: a.tip_contact,
+      contact: a.valoare_contact,
+      serviciu: a.serviciu ?? 'apa',
+      judet: a.judet,
+      localitate: a.localitate_interes,
+      strada: a.strada_interes,
+      cartier: a.cartier_interes,
+    }));
 
     return NextResponse.json({
-      avarii: {
-        active: avariiActive.count ?? 0,
-        total: avariiTotal.count ?? 0,
-        peStatus: distributieStatus,
-        topLocalitati,
-      },
       abonamente: {
         active: abonamenteActive.count ?? 0,
         email: abonamenteEmail.count ?? 0,
         telegram: abonamenteTelegramList.length,
         telegramFaraStart,
+        lista: abonamentiLista,
       },
       telegram: {
         totalCuStart: telegramUsers.count ?? 0,
-      },
-      notificari: {
-        totalTrimise: notificariTrimise.count ?? 0,
-      },
-      utilizatori: {
-        totalConturi: utilizatori.data?.users?.length ?? 0,
       },
     });
   } catch (err) {

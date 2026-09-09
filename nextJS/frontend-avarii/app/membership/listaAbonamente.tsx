@@ -136,9 +136,9 @@ export default function ListaAbonamente({
         return (
           <div
             key={abonament.id}
-            className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+            className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-start md:justify-between gap-3"
           >
-            <div>
+            <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <BadgeServiciu serviciu={abonament.serviciu} />
               {abonament.judet && (
@@ -173,7 +173,7 @@ export default function ListaAbonamente({
                 </p>
               )}
             </div>
-            <div className="flex gap-2 self-start md:self-center">
+            <div className="flex gap-2 self-start shrink-0">
               <button
                 onClick={() => handleTrimiteTest(abonament.id)}
                 disabled={seTrimiteTest === abonament.id || !!seSterge}
