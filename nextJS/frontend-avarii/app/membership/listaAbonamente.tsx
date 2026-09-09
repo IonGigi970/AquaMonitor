@@ -31,7 +31,7 @@ const ETICHETE_SERVICIU: Record<string, { eticheta: string; clase: string }> = {
 function BadgeServiciu({ serviciu }: { serviciu?: string | null }) {
   const config = ETICHETE_SERVICIU[serviciu ?? "apa"] ?? ETICHETE_SERVICIU.apa;
   return (
-    <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full ${config.clase} mb-2`}>
+    <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full ${config.clase}`}>
       {config.eticheta}
     </span>
   );
