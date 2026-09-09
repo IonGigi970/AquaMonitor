@@ -1,12 +1,10 @@
 name: Scraper avarii RAJA
 
 on:
-  schedule:
-    # Rezerva de siguranta: GitHub intarzie/sare frecvent rulari programate ("schedule"),
-    # mai ales la intervale scurte. Declansarea principala, la interval fix, vine de la
-    # un serviciu extern (cron-job.org) care apeleaza /api/cron/trigger-scraper si
-    # porneste acest workflow prin workflow_dispatch (prioritate normala, fara intarzieri).
-    - cron: "0 * * * *"
+  # Declansarea vine doar de la un serviciu extern (cron-job.org) care apeleaza
+  # /api/cron/trigger-scraper si porneste acest workflow prin workflow_dispatch.
+  # Trigger-ul "schedule" a fost eliminat: rula in paralel cu cel extern si
+  # dubla consumul de minute Actions (repo privat, cota lunara limitata).
   workflow_dispatch:
     inputs:
       notificare_test_abonament:
