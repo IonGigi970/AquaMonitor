@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 import requests
 
 from ..config import supabase
+from ..db import citeste_toate
 from ..notificari.abonati import notifica_abonatii
 from ..utils import normalizeaza_text
 from .comun import LOCALITATI_CONSTANTA, judet_canonizat
@@ -139,8 +140,14 @@ def sincronizeaza_intreruperi_curent():
 
     existente = {}
     try:
-        rez = supabase.table("avarii").select("id,sursa_url,status,tip_intrerupere").eq("serviciu", "curent").execute()
-        for r in rez.data or []:
+        # Citire paginata: tabela are peste 1000 de randuri de curent, iar un
+        # raspuns trunchiat ar face randurile lipsa sa para noi (si inserarea lor
+        # ar da eroare de cheie duplicata).
+        randuri_curent = citeste_toate(
+            lambda: supabase.table("avarii")
+            .select("id,sursa_url,status,tip_intrerupere").eq("serviciu", "curent")
+        )
+        for r in randuri_curent:
             if (r.get("sursa_url") or "").startswith("retele:"):
                 existente[r["sursa_url"][7:]] = r
     except Exception as e:
@@ -182,6 +189,10 @@ def sincronizeaza_intreruperi_curent():
                 print(f"⚡ Întrerupere NOUĂ de energie electrică (accidentală): "
                       f"{e['localitate']} {e['cartier']} ({e['judet']}, {e['cod']}).")
                 if inserat.data:
+                    # Înregistrăm rândul nou: dacă feed-ul repetă același cod mai
+                    # jos în aceeași rulare, a doua trecere trebuie să actualizeze,
+                    # nu să insereze din nou (ar da eroare de cheie duplicată).
+                    existente[e["cod"]] = inserat.data[0]
                     notifica_abonatii(inserat.data[0])
         except Exception as ex:
             print(f"❌ Eroare la salvarea întreruperii {e['cod']}: {ex}")

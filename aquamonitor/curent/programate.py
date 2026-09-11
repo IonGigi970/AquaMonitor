@@ -10,6 +10,7 @@ import pdfplumber
 import requests
 
 from ..config import supabase
+from ..db import citeste_toate
 from ..notificari.abonati import notifica_abonatii
 from ..utils import azi_bucuresti, normalizeaza_text
 from .comun import LOCALITATI_CONSTANTA, judet_canonizat
@@ -222,16 +223,21 @@ def sincronizeaza_intreruperi_programate():
     acum = datetime.now(ZoneInfo("Europe/Bucharest"))
 
     try:
-        rez = supabase.table("avarii").select(
-            "id,sursa_url,status,data_inceput,data_sfarsit,descriere_text,"
-            "localitate,judet,detalii_anunt,strada,cartier,data,tip_intrerupere,serviciu"
-        ).eq("serviciu", "curent").execute()
+        # Citire paginata: tabela are peste 1000 de randuri de curent, iar un
+        # raspuns trunchiat ar face randurile lipsa sa para noi (inserarea lor ar
+        # da eroare de cheie duplicata, iar retragerile ar fi ratate).
+        randuri_curent = citeste_toate(
+            lambda: supabase.table("avarii").select(
+                "id,sursa_url,status,data_inceput,data_sfarsit,descriere_text,"
+                "localitate,judet,detalii_anunt,strada,cartier,data,tip_intrerupere,serviciu"
+            ).eq("serviciu", "curent")
+        )
     except Exception as e:
         print(f"⚠️ Eroare la citirea deconectărilor programate: {e}")
         return
 
     pdf_randuri = {}
-    for r in rez.data or []:
+    for r in randuri_curent:
         u = r.get("sursa_url") or ""
         if u.startswith("pdfprog:"):
             pdf_randuri[u[len("pdfprog:"):]] = r
@@ -285,6 +291,12 @@ def sincronizeaza_intreruperi_programate():
                      f"anunțată pentru {e['localitate']}, județul {e['judet']}: {detalii}.")
         cheie_raw = f"{e['data_zi']:%d/%m/%Y}|{e['localitate']}|{ora_inc}|{ora_sf}"
         cod = hashlib.md5(cheie_raw.encode("utf-8")).hexdigest()[:12]
+        if cod in coduri_in_pdf:
+            # PDF-ul listează aceeași localitate cu același interval de mai multe ori
+            # (ex: mai multe străzi din același oraș) — toate dau același cod. Am
+            # procesat-o deja în această rulare: o a doua inserare ar da eroare de
+            # cheie duplicată, iar o actualizare ar suprascrie detaliile cu ultima.
+            continue
         coduri_in_pdf.add(cod)
         rand = pdf_randuri.get(cod)
         try:
