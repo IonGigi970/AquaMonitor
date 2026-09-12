@@ -9,7 +9,15 @@ from zoneinfo import ZoneInfo
 import pdfplumber
 import requests
 
-from ..config import supabase
+from ..config import (
+    PREFIX_SURSA_PDF,
+    SERVICIU_CURENT,
+    STATUS_ANULATA,
+    STATUS_PROGRAMATA,
+    STATUS_REMEDIAT,
+    TIP_PROGRAMATA,
+    supabase,
+)
 from ..db import citeste_toate
 from ..notificari.abonati import notifica_abonatii, sterge_notificari_pentru_avarie
 from ..utils import azi_bucuresti, normalizeaza_text
@@ -243,14 +251,14 @@ def sincronizeaza_intreruperi_programate():
             lambda: supabase.table("avarii").select(
                 "id,sursa_url,status,data_inceput,data_sfarsit,descriere_text,"
                 "localitate,judet,detalii_anunt,strada,cartier,data,tip_intrerupere,serviciu"
-            ).eq("serviciu", "curent").like("sursa_url", "pdfprog:%")
+            ).eq("serviciu", SERVICIU_CURENT).like("sursa_url", f"{PREFIX_SURSA_PDF}%")
         )
     except Exception as e:
         print(f"⚠️ Eroare la citirea deconectărilor programate: {e}")
         return
 
     # Filtrul din interogare garantează prefixul, deci tăiem direct.
-    pdf_randuri = {r["sursa_url"][len("pdfprog:"):]: r for r in randuri_curent}
+    pdf_randuri = {r["sursa_url"][len(PREFIX_SURSA_PDF):]: r for r in randuri_curent}
 
     # 1. Deconectările a căror zi a trecut se închid.
     for cod, r in pdf_randuri.items():
@@ -259,10 +267,10 @@ def sincronizeaza_intreruperi_programate():
             zi = datetime.strptime(di[0], "%d/%m/%Y").date()
         except Exception:
             continue
-        if zi < azi and r.get("status") != "REMEDIAT":
+        if zi < azi and r.get("status") != STATUS_REMEDIAT:
             try:
                 supabase.table("avarii").update(
-                    {"status": "REMEDIAT", "data_sfarsit": acum.strftime("%d/%m/%Y %H:%M")}
+                    {"status": STATUS_REMEDIAT, "data_sfarsit": acum.strftime("%d/%m/%Y %H:%M")}
                 ).eq("id", r["id"]).execute()
                 print(f"✅ Deconectare programată încheiată: {cod}")
             except Exception as ex:
@@ -309,51 +317,39 @@ def sincronizeaza_intreruperi_programate():
             continue
         coduri_in_pdf.add(cod)
         rand = pdf_randuri.get(cod)
+        campuri = {
+            "descriere_text": descriere,
+            "data_inceput": data_inceput,
+            "data_sfarsit": data_sfarsit,
+            "data": e["data_zi"].isoformat(),
+        }
         try:
-            if rand and rand.get("status") == "PROGRAMATA":
+            if rand and rand.get("status") == STATUS_PROGRAMATA:
                 # Deja în baza noastră: actualizăm doar dacă s-a schimbat ceva
                 schimbat = (rand.get("descriere_text") != descriere
                             or rand.get("data_inceput") != data_inceput
                             or rand.get("data_sfarsit") != data_sfarsit)
                 if schimbat:
-                    supabase.table("avarii").update({
-                        "descriere_text": descriere,
-                        "data_inceput": data_inceput,
-                        "data_sfarsit": data_sfarsit,
-                        "data": e["data_zi"].isoformat(),
-                    }).eq("id", rand["id"]).execute()
+                    supabase.table("avarii").update(campuri).eq("id", rand["id"]).execute()
             elif rand:
                 # A reapărut în PDF după ce fusese închisă (REMEDIAT) sau retrasă
                 # (ANULATA): reactivăm și anunțăm abonații (la ANULATA marcajele
                 # de notificare au fost șterse la retragere, deci mesajul ajunge).
-                reactivata = dict(rand)
-                reactivata.update({
-                    "status": "PROGRAMATA",
-                    "descriere_text": descriere,
-                    "data_inceput": data_inceput,
-                    "data_sfarsit": data_sfarsit,
-                    "data": e["data_zi"].isoformat(),
-                })
                 supabase.table("avarii").update({
-                    "status": "PROGRAMATA",
-                    "descriere_text": descriere,
-                    "data_inceput": data_inceput,
-                    "data_sfarsit": data_sfarsit,
-                    "data": e["data_zi"].isoformat(),
+                    **campuri, "status": STATUS_PROGRAMATA,
                 }).eq("id", rand["id"]).execute()
+                reactivata = {**rand, **campuri, "status": STATUS_PROGRAMATA}
                 print(f"📅 Reapariție deconectare programată: {e['localitate']} ({cod}).")
                 notifica_abonatii(reactivata)
             else:
                 inserat = supabase.table("avarii").insert({
-                    "serviciu": "curent", "status": "PROGRAMATA",
-                    "tip_intrerupere": "programata",
+                    **campuri,
+                    "serviciu": SERVICIU_CURENT, "status": STATUS_PROGRAMATA,
+                    "tip_intrerupere": TIP_PROGRAMATA,
                     "judet": e["judet"],
                     "localitate": e["localitate"], "strada": "", "cartier": "",
-                    "data": e["data_zi"].isoformat(),
-                    "data_inceput": data_inceput, "data_sfarsit": data_sfarsit,
-                    "descriere_text": descriere,
                     "detalii_anunt": detalii,
-                    "sursa_url": f"pdfprog:{cod}",
+                    "sursa_url": f"{PREFIX_SURSA_PDF}{cod}",
                 }).execute()
                 print(f"📅 Deconectare programată NOUĂ: {e['localitate']} "
                       f"({e['judet']}, {e['data_zi']:%d.%m.%Y}, {ora_inc}-{ora_sf}).")
@@ -374,17 +370,17 @@ def sincronizeaza_intreruperi_programate():
             zi = datetime.strptime(di[0], "%d/%m/%Y").date()
         except Exception:
             continue
-        if r.get("status") != "PROGRAMATA":
+        if r.get("status") != STATUS_PROGRAMATA:
             continue
         if not (prima_zi_pdf <= zi <= ultima_zi_pdf) or zi < azi:
             continue
         try:
-            supabase.table("avarii").update({"status": "ANULATA"}).eq("id", r["id"]).execute()
+            supabase.table("avarii").update({"status": STATUS_ANULATA}).eq("id", r["id"]).execute()
             # Ștergem marcajele de notificare ca abonații care au primit anunțul
             # inițial să primească și anunțul de retragere (notifica_abonatii
             # ar sări peste ei altfel, din cauza deduplicării).
             sterge_notificari_pentru_avarie(r["id"])
-            r["status"] = "ANULATA"
+            r["status"] = STATUS_ANULATA
             notifica_abonatii(r)
             nr_retrase += 1
         except Exception as ex:

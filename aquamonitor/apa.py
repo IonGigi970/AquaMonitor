@@ -7,7 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from .ai_extract import extrage_avarii_din_text
-from .config import supabase
+from .config import SERVICIU_APA, SERVICIU_CURENT, STATUS_REMEDIAT, supabase
 from .geocodare import obtine_coordonate
 from .notificari.abonati import notifica_abonatii
 from .utils import azi_bucuresti
@@ -96,19 +96,30 @@ def curata_avarii_vechi():
     prag = (azi - timedelta(days=2)).isoformat()
     try:
         # 1. Avarii apă cu dată explicită mai veche de 2 zile
-        rezultat = supabase.table("avarii").delete().eq("serviciu", "apa").lt("data", prag).execute()
+        rezultat = (
+            supabase.table("avarii").delete()
+            .eq("serviciu", SERVICIU_APA).lt("data", prag).execute()
+        )
         nr = len(rezultat.data or [])
         if nr:
             print(f"🗑️  Am șters {nr} avarii de apă mai vechi de 2 zile (data < {prag}).")
 
         # 2. Întreruperi de curent rezolvate, mai vechi de 2 zile (cele active rămân)
-        rezultat_c = supabase.table("avarii").delete().eq("serviciu", "curent").eq("status", "REMEDIAT").lt("data", prag).execute()
+        rezultat_c = (
+            supabase.table("avarii").delete()
+            .eq("serviciu", SERVICIU_CURENT).eq("status", STATUS_REMEDIAT)
+            .lt("data", prag).execute()
+        )
         nr_c = len(rezultat_c.data or [])
         if nr_c:
             print(f"🗑️  Am șters {nr_c} întreruperi de curent rezolvate și vechi.")
 
         # 3. Avarii apă fără dată, adăugate în urmă cu mai mult de 2 zile
-        rezultat2 = supabase.table("avarii").delete().eq("serviciu", "apa").is_("data", "null").lt("data_adaugarii", prag).execute()
+        rezultat2 = (
+            supabase.table("avarii").delete()
+            .eq("serviciu", SERVICIU_APA).is_("data", "null")
+            .lt("data_adaugarii", prag).execute()
+        )
         nr2 = len(rezultat2.data or [])
         if nr2:
             print(f"🗑️  Am șters {nr2} avarii vechi fără dată (adăugate înainte de {prag}).")

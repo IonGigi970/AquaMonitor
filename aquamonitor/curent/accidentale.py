@@ -4,7 +4,16 @@ from datetime import datetime
 
 import requests
 
-from ..config import supabase
+from ..config import (
+    PREFIX_SURSA_RETELE,
+    SERVICIU_APA,
+    SERVICIU_CURENT,
+    STATUS_AVARIE,
+    STATUS_REMEDIAT,
+    TIP_ACCIDENTALA,
+    TIP_PROGRAMATA,
+    supabase,
+)
 from ..db import citeste_toate
 from ..notificari.abonati import notifica_abonatii
 from ..utils import acum_bucuresti, normalizeaza_text
@@ -25,7 +34,7 @@ def _localitati_recunoscute_curent():
         rez = supabase.table("abonamente").select("localitate_interes").execute()
         for r in rez.data or []:
             nume.add(normalizeaza_text(r.get("localitate_interes") or ""))
-        rez2 = supabase.table("avarii").select("localitate").eq("serviciu", "apa").execute()
+        rez2 = supabase.table("avarii").select("localitate").eq("serviciu", SERVICIU_APA).execute()
         for r in rez2.data or []:
             nume.add(normalizeaza_text(r.get("localitate") or ""))
     except Exception:
@@ -62,10 +71,10 @@ def mapeaza_zona_intrerupere(desc_norm, provincia_norm, localitati):
 def descriere_intrerupere(attr, desc_raw, tip, judet):
     """Text descriptiv dintr-un rând ArcGIS (fără date personale).
 
-    tip: "accidentala" (avarie în rețea) sau "programata" (deconectare planificată).
+    tip: TIP_ACCIDENTALA (avarie în rețea) sau TIP_PROGRAMATA (deconectare planificată).
     """
     prefix = f", județul {judet}" if judet else ""
-    if tip == "programata":
+    if tip == TIP_PROGRAMATA:
         text = (f"Deconectare programată de energie electrică (lucrări în rețea), "
                 f"anunțată în zona: {desc_raw}{prefix}.")
     else:
@@ -76,11 +85,25 @@ def descriere_intrerupere(attr, desc_raw, tip, judet):
         text += f" Clienți afectați: {clienti}."
     estimare = (attr.get("data_prev_") or "").strip()
     if estimare and "definire" not in estimare.lower():
-        if tip == "programata":
+        if tip == TIP_PROGRAMATA:
             text += f" Sfârșit estimat: {estimare}."
         else:
             text += f" Estimare remediere: {estimare}."
     return text
+
+
+def campuri_comune(e):
+    """Câmpurile unei întreruperi accidentale care se scriu identic la orice
+    salvare (indiferent dacă inserăm, actualizăm sau reactivăm rândul)."""
+    return {
+        "judet": e["judet"],
+        "latitudine": e["lat"],
+        "longitudine": e["lon"],
+        "data_inceput": e["data_inceput"],
+        "data_sfarsit": e["data_sfarsit"],
+        "descriere_text": e["descriere"],
+        "tip_intrerupere": TIP_ACCIDENTALA,
+    }
 
 
 def sincronizeaza_intreruperi_curent():
@@ -129,7 +152,7 @@ def sincronizeaza_intreruperi_curent():
             "judet": judet,
             "localitate": localitate,
             "cartier": cartier,
-            "descriere": descriere_intrerupere(attr, desc_raw, "accidentala", judet),
+            "descriere": descriere_intrerupere(attr, desc_raw, TIP_ACCIDENTALA, judet),
             "data": data_zi,
             "data_inceput": data_inceput,
             "data_sfarsit": data_sfarsit,
@@ -147,46 +170,35 @@ def sincronizeaza_intreruperi_curent():
         randuri_curent = citeste_toate(
             lambda: supabase.table("avarii")
             .select("id,sursa_url,status,tip_intrerupere")
-            .eq("serviciu", "curent")
-            .like("sursa_url", "retele:%")
+            .eq("serviciu", SERVICIU_CURENT)
+            .like("sursa_url", f"{PREFIX_SURSA_RETELE}%")
         )
         for r in randuri_curent:
-            existente[r["sursa_url"][7:]] = r
+            existente[r["sursa_url"][len(PREFIX_SURSA_RETELE):]] = r
     except Exception as e:
         print(f"⚠️ Eroare la citirea întreruperilor existente: {e}")
         return
 
     for e in intrari:
         rand = existente.get(e["cod"])
+        campuri = campuri_comune(e)
         try:
-            if rand and rand.get("status") != "REMEDIAT":
+            if rand and rand.get("status") != STATUS_REMEDIAT:
                 # Deja activă în baza noastră: actualizăm datele curente
-                supabase.table("avarii").update({
-                    "judet": e["judet"],
-                    "latitudine": e["lat"], "longitudine": e["lon"],
-                    "data_inceput": e["data_inceput"], "data_sfarsit": e["data_sfarsit"],
-                    "descriere_text": e["descriere"], "tip_intrerupere": "accidentala",
-                }).eq("id", rand["id"]).execute()
+                supabase.table("avarii").update(campuri).eq("id", rand["id"]).execute()
             elif rand:
                 # A reapărut după rezolvare: o reactivăm
                 supabase.table("avarii").update({
-                    "status": "AVARIE", "data_sfarsit": e["data_sfarsit"],
-                    "judet": e["judet"],
-                    "latitudine": e["lat"], "longitudine": e["lon"],
-                    "data_inceput": e["data_inceput"], "descriere_text": e["descriere"],
-                    "tip_intrerupere": "accidentala",
+                    **campuri, "status": STATUS_AVARIE,
                 }).eq("id", rand["id"]).execute()
                 print(f"⚡ Reapariție întrerupere {e['cod']} ({e['localitate']} {e['cartier']}).")
             else:
                 inserat = supabase.table("avarii").insert({
-                    "serviciu": "curent", "status": "AVARIE",
-                    "judet": e["judet"],
+                    **campuri,
+                    "serviciu": SERVICIU_CURENT, "status": STATUS_AVARIE,
                     "localitate": e["localitate"], "strada": "", "cartier": e["cartier"],
-                    "data": e["data"], "data_inceput": e["data_inceput"],
-                    "data_sfarsit": e["data_sfarsit"],
-                    "descriere_text": e["descriere"], "tip_intrerupere": "accidentala",
-                    "latitudine": e["lat"], "longitudine": e["lon"],
-                    "sursa_url": f"retele:{e['cod']}",
+                    "data": e["data"],
+                    "sursa_url": f"{PREFIX_SURSA_RETELE}{e['cod']}",
                 }).execute()
                 print(f"⚡ Întrerupere NOUĂ de energie electrică (accidentală): "
                       f"{e['localitate']} {e['cartier']} ({e['judet']}, {e['cod']}).")
@@ -206,7 +218,7 @@ def sincronizeaza_intreruperi_curent():
     acum = acum_bucuresti().strftime("%d/%m/%Y %H:%M")
     de_rezolvat = [
         rand["id"] for cod, rand in existente.items()
-        if cod not in coduri_active and rand.get("status") != "REMEDIAT"
+        if cod not in coduri_active and rand.get("status") != STATUS_REMEDIAT
     ]
     TRANSA = 100
     nr_rezolvate = 0
@@ -214,7 +226,7 @@ def sincronizeaza_intreruperi_curent():
         transa = de_rezolvat[i:i + TRANSA]
         try:
             supabase.table("avarii").update(
-                {"status": "REMEDIAT", "data_sfarsit": acum}
+                {"status": STATUS_REMEDIAT, "data_sfarsit": acum}
             ).in_("id", transa).execute()
             nr_rezolvate += len(transa)
         except Exception as ex:
