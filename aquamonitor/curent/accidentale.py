@@ -1,14 +1,13 @@
 """Intreruperi accidentale de energie electrica, preluate din API-ul ArcGIS."""
 
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 import requests
 
 from ..config import supabase
 from ..db import citeste_toate
 from ..notificari.abonati import notifica_abonatii
-from ..utils import normalizeaza_text
+from ..utils import acum_bucuresti, normalizeaza_text
 from .comun import LOCALITATI_CONSTANTA, judet_canonizat
 
 # Curent electric: întreruperi neplanificate (avarii) din API-ul public ArcGIS
@@ -198,7 +197,7 @@ def sincronizeaza_intreruperi_curent():
             print(f"❌ Eroare la salvarea întreruperii {e['cod']}: {ex}")
 
     # Marchează rezolvate întreruperile care nu mai apar în feed
-    acum = datetime.now(ZoneInfo("Europe/Bucharest")).strftime("%d/%m/%Y %H:%M")
+    acum = acum_bucuresti().strftime("%d/%m/%Y %H:%M")
     nr_rezolvate = 0
     for cod, rand in existente.items():
         if cod not in coduri_active and rand.get("status") != "REMEDIAT":

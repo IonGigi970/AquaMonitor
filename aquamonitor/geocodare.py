@@ -91,7 +91,7 @@ def alege_cel_mai_bun_rezultat(date, prefera_clasa):
     return date[0]
 
 
-def obtine_coordonate(localitate, strada, cartier=None):
+def _geocodeaza(localitate, strada, cartier=None):
     """Transformă o adresă în coordonate GPS cu reguli de curățare a textului."""
     try:
         strada_curata = strada.lower() if strada else ""
@@ -161,3 +161,26 @@ def obtine_coordonate(localitate, strada, cartier=None):
         print(f"⚠️ Eroare la geocoding pentru {localitate}: {e}")
 
     return None, None
+
+
+# Adresă normalizată -> (lat, lon), tinut minte per proces (= o rulare de scraper).
+# Aceeași stradă apare în mai multe avarii din aceeași zi, iar fără cache fiecare
+# apariție însemna o cerere HTTP către Nominatim plus pauza obligatorie de o
+# secundă — zeci de secunde pierdute pe rulare, degeaba.
+_cache_coordonate = {}
+
+
+def obtine_coordonate(localitate, strada, cartier=None):
+    """Coordonatele GPS ale unei adrese, cu rezultatul ținut minte per proces.
+
+    Semnătura și comportamentul rămân cele de dinainte; doar rezultatele deja
+    calculate sunt refolosite, ca să nu repetăm cererile către Nominatim.
+    """
+    cheie = (
+        normalizeaza_text(localitate),
+        normalizeaza_text(strada),
+        normalizeaza_text(cartier),
+    )
+    if cheie not in _cache_coordonate:
+        _cache_coordonate[cheie] = _geocodeaza(localitate, strada, cartier)
+    return _cache_coordonate[cheie]

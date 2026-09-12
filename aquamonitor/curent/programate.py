@@ -207,6 +207,17 @@ def parseaza_intreruperi_programate(text_pdf):
     return intrari
 
 
+def bucata_de_zi(ora):
+    """Transformă o oră "HH:MM" în minutul zilei, pentru comparații corecte.
+
+    Compararea orelor ca text e greșită: regexul orarului acceptă și ore scrise cu
+    o singură cifră ("8:00"), iar "16:00" <= "8:00" e adevărat ca string — un
+    interval 8:00-16:00 ar fi fost tratat ca trecând peste miezul nopții.
+    """
+    hh, mm = ora.split(":")
+    return int(hh) * 60 + int(mm)
+
+
 def sincronizeaza_intreruperi_programate():
     """Sincronizează deconectările PROGRAMATE din PDF-ul săptămânal (toate județele).
 
@@ -283,7 +294,7 @@ def sincronizeaza_intreruperi_programate():
         ora_inc, ora_sf = e["ora_inceput"], e["ora_sfarsit"]
         data_inceput = f"{e['data_zi']:%d/%m/%Y} {ora_inc}"
         data_sfarsit_zi = e["data_zi"]
-        if ora_sf <= ora_inc:
+        if bucata_de_zi(ora_sf) <= bucata_de_zi(ora_inc):
             data_sfarsit_zi += timedelta(days=1)
         data_sfarsit = f"{data_sfarsit_zi:%d/%m/%Y} {ora_sf}"
         detalii = re.sub(r"\s+", " ", e["detalii"]).strip(" ,;|")
