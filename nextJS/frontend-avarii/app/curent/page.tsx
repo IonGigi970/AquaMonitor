@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import SiteHeader from '@/components/siteHeader';
 import SiteFooter from '@/components/siteFooter';
-import { formateazaData, formateazaText } from '@/lib/format';
+import { formateazaText } from '@/lib/format';
 
 const MapComponent = dynamic(() => import('@/components/mapComponent'), {
   ssr: false,
@@ -60,16 +60,6 @@ function etichetaData(text: string): string {
   const luna = d.getMonth() + 1;
   const ora = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   return `${ZILE[d.getDay()]} ${String(zi).padStart(2, "0")}.${String(luna).padStart(2, "0")}.${d.getFullYear()} · ${ora}`;
-}
-
-function badgeClase(programata: boolean, rezolvata: boolean): string {
-  if (rezolvata) return "bg-emerald-100 text-emerald-700";
-  return programata ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600";
-}
-
-function badgeText(programata: boolean, rezolvata: boolean): string {
-  if (rezolvata) return "✅ Rezolvat";
-  return programata ? "📅 Programată" : "⚡ Întrerupere";
 }
 
 function CardAnulata({ item }: { item: Intrerupere }) {

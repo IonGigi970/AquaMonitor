@@ -65,7 +65,7 @@ export default function GdprPage() {
             <ul className="list-disc list-inside text-sm text-slate-600 mt-2 space-y-1">
               <li>Dreptul de acces la datele tale</li>
               <li>Dreptul la rectificarea datelor incorecte</li>
-              <li>Dreptul la ștergerea datelor ("dreptul de a fi uitat")</li>
+              <li>Dreptul la ștergerea datelor („dreptul de a fi uitat”)</li>
               <li>Dreptul la restricționarea prelucrării</li>
               <li>Dreptul la portabilitatea datelor</li>
               <li>Dreptul de a-ți retrage consimțământul oricând</li>
@@ -91,7 +91,7 @@ export default function GdprPage() {
           <section className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-xl font-bold text-slate-800 mb-3">7. Termeni de utilizare</h2>
             <p className="text-sm text-slate-600 leading-relaxed">
-              Informațiile afișate pe acest site sunt furnizate "ca atare", cu bună-credință, dar
+              Informațiile afișate pe acest site sunt furnizate „ca atare”, cu bună-credință, dar
               fără garanții de exactitate sau actualitate. Nu ne asumăm răspunderea pentru
               deciziile luate pe baza acestor informații. Sursa oficială a avariilor este site-ul
               RAJA. Este interzisă utilizarea site-ului în scopuri ilegale sau pentru a deranja

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface TelegramUser {
   username: string;
@@ -15,7 +15,7 @@ export default function AdminTelegram({ userEmail }: { userEmail: string }) {
   const [users, setUsers] = useState<TelegramUser[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = () => {
+  const load = useCallback(() => {
     fetch("/api/telegram/users", {
       headers: { Authorization: `Bearer ${userEmail}` },
     })
@@ -25,11 +25,11 @@ export default function AdminTelegram({ userEmail }: { userEmail: string }) {
       })
       .then((data) => setUsers(data.users || []))
       .catch((err) => setError(err.message));
-  };
+  }, [userEmail]);
 
   useEffect(() => {
     load();
-  }, [userEmail]);
+  }, [load]);
 
   const toggleUser = async (username: string, newState: boolean) => {
     try {

@@ -24,13 +24,10 @@ const supabase = createClient();
 export default function SiteHeader({
   activ,
   varianta = "complet",
-  subtitlu,
   inapoi,
 }: {
   activ?: string;
   varianta?: "complet" | "simplu";
-  /** Text mic sub numele aplicației (ex: "Energie electrică"). */
-  subtitlu?: string;
   /** Link de întoarcere, afișat doar la varianta simplă. */
   inapoi?: { href: string; eticheta: string };
 }) {
@@ -51,11 +48,6 @@ export default function SiteHeader({
       <span className="text-2xl font-bold flex items-center gap-2 tracking-tight group-hover:text-blue-100 transition-colors">
         <span aria-hidden="true">💧</span> AquaMonitor CT
       </span>
-      {subtitlu && (
-        <span className="text-[11px] md:text-xs font-bold uppercase tracking-widest opacity-80 mt-0.5">
-          {subtitlu}
-        </span>
-      )}
     </Link>
   );
 
