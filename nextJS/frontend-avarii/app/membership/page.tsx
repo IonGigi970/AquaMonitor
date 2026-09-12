@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
+import SiteHeader from "@/components/siteHeader";
 import { createClient } from "@/lib/supabase/server";
 import MembershipForm from "./membershipForm";
 import ListaAbonamente from "./listaAbonamente";
@@ -27,16 +27,7 @@ export default async function MembershipPage() {
 
   return (
     <div className="bg-slate-50 min-h-screen flex flex-col">
-      <nav className="bg-blue-700 text-white p-4 shadow-lg">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold tracking-tight">
-            AquaMonitor CT
-          </Link>
-          <Link href="/" className="hover:text-blue-200 transition-colors font-semibold">
-            ← Înapoi la hartă
-          </Link>
-        </div>
-      </nav>
+      <SiteHeader varianta="simplu" inapoi={{ href: "/", eticheta: "← Înapoi la hartă" }} />
 
       <div className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-6">
         <h1 className="text-2xl font-bold text-slate-800 mb-1">Alertele mele</h1>

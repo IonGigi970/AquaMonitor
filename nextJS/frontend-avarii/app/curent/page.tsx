@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import SiteHeader from '@/components/siteHeader';
+import SiteFooter from '@/components/siteFooter';
 import { formateazaData, formateazaText } from '@/lib/format';
 
 const MapComponent = dynamic(() => import('@/components/mapComponent'), {
@@ -254,38 +255,7 @@ export default function CurentPage() {
 
   return (
     <div className="bg-slate-50 min-h-screen flex flex-col relative">
-      <nav className="bg-amber-600 text-white p-4 shadow-lg sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex flex-col items-start leading-tight">
-                <div className="text-2xl font-bold flex items-center gap-2 tracking-tight">
-                    ⚡ AquaMonitor CT
-                </div>
-                <div className="text-[11px] md:text-xs font-bold uppercase tracking-widest text-amber-200 mt-0.5">
-                    Energie electrică
-                </div>
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-3 md:gap-6 font-semibold">
-                <Link
-                  href="/"
-                  className="hover:text-amber-100 transition-colors text-amber-50 px-2 py-1"
-                >
-                  💧 Avarii apă
-                </Link>
-                <Link
-                  href="/membership"
-                  className="hover:text-amber-100 transition-colors text-amber-50 px-2 py-1"
-                >
-                  🔔 Alertele mele
-                </Link>
-                <Link
-                  href="/sustine"
-                  className="bg-white text-amber-900 px-5 py-2.5 rounded-xl shadow hover:bg-amber-100 transition-all transform hover:scale-105 flex items-center gap-2"
-                >
-                    ☕ Susține Proiectul
-                </Link>
-            </div>
-        </div>
-      </nav>
+      <SiteHeader activ="/curent" />
 
       <div className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="col-span-1 flex flex-col gap-6">
@@ -499,52 +469,7 @@ export default function CurentPage() {
         </div>
       </div>
 
-      <footer className="bg-amber-800 text-white mt-8">
-        <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-center">
-          <div className="flex flex-col items-center">
-            <h3 className="font-bold text-lg mb-2">⚡ AquaMonitor CT — Energie electrică</h3>
-            <p className="text-sm text-amber-100 max-w-xs">
-              Monitorizăm întreruperile de energie electrică anunțate de Rețele Electrice
-              în toate județele deservite, în timp real.
-            </p>
-          </div>
-          <div className="flex flex-col items-center">
-            <h3 className="font-bold text-lg mb-2">Contact & Sugestii</h3>
-            <p className="text-sm text-amber-100">
-              Ai o sugestie sau o problemă? Scrie-ne la:
-            </p>
-            <a
-              href="mailto:aquamonitorct@gmail.com"
-              className="text-sm font-semibold text-amber-300 hover:text-amber-200 transition-colors inline-block mt-1"
-            >
-              aquamonitorct@gmail.com
-            </a>
-          </div>
-          <div className="flex flex-col items-center">
-            <h3 className="font-bold text-lg mb-2">Linkuri utile</h3>
-            <ul className="text-sm text-amber-100 space-y-1">
-              <li>
-                <Link href="/" className="hover:text-white transition-colors">
-                  💧 Avarii apă
-                </Link>
-              </li>
-              <li>
-                <Link href="/membership" className="hover:text-white transition-colors">
-                  Alertele mele
-                </Link>
-              </li>
-              <li>
-                <Link href="/sustine" className="hover:text-white transition-colors">
-                  Susține proiectul
-                </Link>
-              </li>
-            </ul>
-          </div>
-        </div>
-        <div className="border-t border-amber-700 py-4 text-center text-xs text-amber-200">
-          © {new Date().getFullYear()} AquaMonitor CT. Proiect independent, neafiliat cu RAJA sau Rețele Electrice.
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

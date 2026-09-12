@@ -9,13 +9,31 @@ import { useUser } from "@/lib/useUser";
 const supabase = createClient();
 
 /**
- * Bara de sus a aplicației: identitatea proiectului, serviciile monitorizate,
- * linkul către abonamente, butonul de susținere și starea de autentificare.
+ * Bara de sus a aplicației. Două variante:
  *
- * `activ` este ruta paginii curente (ex: "/avarii"), folosită doar ca să
- * evidențiem serviciul pe care se află utilizatorul.
+ * - "complet" (implicit): identitatea proiectului, serviciile monitorizate,
+ *   linkul către abonamente, butonul de susținere și starea de autentificare.
+ *   Se folosește pe paginile principale.
+ * - "simplu": doar identitatea proiectului și, opțional, un link de întoarcere.
+ *   Se folosește pe paginile de autentificare și de informare, unde meniul
+ *   complet ar distrage de la formular.
+ *
+ * `activ` este ruta paginii curente (ex: "/avarii") și servește doar la
+ * evidențierea serviciului pe care se află utilizatorul.
  */
-export default function SiteHeader({ activ }: { activ?: string }) {
+export default function SiteHeader({
+  activ,
+  varianta = "complet",
+  subtitlu,
+  inapoi,
+}: {
+  activ?: string;
+  varianta?: "complet" | "simplu";
+  /** Text mic sub numele aplicației (ex: "Energie electrică"). */
+  subtitlu?: string;
+  /** Link de întoarcere, afișat doar la varianta simplă. */
+  inapoi?: { href: string; eticheta: string };
+}) {
   const router = useRouter();
   const { user, incarcat } = useUser();
 
@@ -25,15 +43,44 @@ export default function SiteHeader({ activ }: { activ?: string }) {
     router.refresh();
   };
 
+  const logo = (
+    <Link
+      href="/"
+      className="flex flex-col items-start leading-tight group"
+    >
+      <span className="text-2xl font-bold flex items-center gap-2 tracking-tight group-hover:text-blue-100 transition-colors">
+        <span aria-hidden="true">💧</span> AquaMonitor CT
+      </span>
+      {subtitlu && (
+        <span className="text-[11px] md:text-xs font-bold uppercase tracking-widest opacity-80 mt-0.5">
+          {subtitlu}
+        </span>
+      )}
+    </Link>
+  );
+
+  if (varianta === "simplu") {
+    return (
+      <nav className="bg-blue-700 text-white p-4 shadow-lg">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          {logo}
+          {inapoi && (
+            <Link
+              href={inapoi.href}
+              className="bg-white/10 hover:bg-white/20 transition-colors px-4 py-2 rounded-xl text-sm font-semibold"
+            >
+              {inapoi.eticheta}
+            </Link>
+          )}
+        </div>
+      </nav>
+    );
+  }
+
   return (
     <nav className="bg-blue-700 text-white p-4 shadow-lg sticky top-0 z-40">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-        <Link
-          href="/"
-          className="text-2xl font-bold flex items-center gap-2 tracking-tight hover:text-blue-100 transition-colors"
-        >
-          <span aria-hidden="true">💧</span> AquaMonitor CT
-        </Link>
+        {logo}
 
         <div className="flex flex-wrap items-center justify-center gap-3 md:gap-6 font-semibold">
           {SERVICII.map((serviciu) => (

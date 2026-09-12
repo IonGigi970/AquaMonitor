@@ -1,21 +1,9 @@
-import Link from "next/link";
+import SiteHeader from "@/components/siteHeader";
 
 export default function SustinePage() {
   return (
     <div className="bg-slate-50 min-h-screen flex flex-col">
-      <nav className="bg-blue-700 text-white p-4 shadow-lg">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold tracking-tight">
-            AquaMonitor CT
-          </Link>
-          <Link
-            href="/"
-            className="bg-white/10 hover:bg-white/20 transition-colors px-4 py-2 rounded-xl text-sm font-semibold"
-          >
-            ← Înapoi la hartă
-          </Link>
-        </div>
-      </nav>
+      <SiteHeader varianta="simplu" inapoi={{ href: "/", eticheta: "← Înapoi la hartă" }} />
 
       <div className="flex-1 max-w-3xl mx-auto w-full p-4 md:p-8">
         <div className="text-center mb-8">

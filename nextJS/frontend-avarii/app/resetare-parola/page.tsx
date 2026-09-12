@@ -3,6 +3,7 @@
 import { useState, type SyntheticEvent } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import SiteHeader from "@/components/siteHeader";
 
 export default function ResetareParolaPage() {
   const supabase = createClient();
@@ -39,13 +40,7 @@ export default function ResetareParolaPage() {
 
   return (
     <div className="bg-slate-50 min-h-screen flex flex-col">
-      <nav className="bg-blue-700 text-white p-4 shadow-lg">
-        <div className="max-w-7xl mx-auto flex items-center">
-          <Link href="/" className="text-2xl font-bold tracking-tight">
-            AquaMonitor CT
-          </Link>
-        </div>
-      </nav>
+      <SiteHeader varianta="simplu" />
 
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-8 w-full max-w-md">
