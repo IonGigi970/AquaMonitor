@@ -2,7 +2,14 @@
 
 import requests
 
-from ..config import ETICHETE_SERVICIU, STATUSURI_AFISATE, TELEGRAM_BOT_TOKEN, supabase
+from ..config import TELEGRAM_BOT_TOKEN, supabase
+from .context import escape_markdown, pregateste_context
+
+# Username -> chat_id, rezolvat o singura data per proces (= o rulare de scraper).
+# Fara cache, fiecare mesaj trimis reia getUpdates (un apel HTTP) si rescrie
+# aceeasi mapare in baza de date. Cache-ul traieste cat procesul.
+_cache_chat_id = {}
+
 
 def gaseste_chat_id_telegram(username):
     """Rezolvă username-ul Telegram (ex: @Victoras45) în chat_id numeric.
@@ -16,17 +23,27 @@ def gaseste_chat_id_telegram(username):
     username = (username or "").lstrip("@").lower()
     if not username:
         return None
+    if username in _cache_chat_id:
+        return _cache_chat_id[username]
 
     # 1. Verificăm tabela de mapări salvate
     try:
-        rez = supabase.table("telegram_users").select("chat_id").eq("username", 
-username).eq("activ", True).limit(1).execute()
+        rez = (
+            supabase.table("telegram_users")
+            .select("chat_id")
+            .eq("username", username)
+            .eq("activ", True)
+            .limit(1)
+            .execute()
+        )
         if rez.data:
-            return rez.data[0]["chat_id"]
+            _cache_chat_id[username] = rez.data[0]["chat_id"]
+            return _cache_chat_id[username]
     except Exception:
         pass
 
-    # 2. Interogăm getUpdates pentru a găsi chat_id-ul (dacă userul a dat /start recent)
+    # 2. Interogăm getUpdates pentru a găsi chat_id-ul (dacă userul a dat /start recent).
+    # Un singur apel acoperă toți utilizatorii din răspuns, deci îi memorăm pe toți.
     try:
         r = requests.get(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates", timeout=15)
         updates = r.json().get("result", [])
@@ -36,20 +53,20 @@ username).eq("activ", True).limit(1).execute()
             uname = (frm.get("username") or "").lower()
             chat_id = (msg.get("chat") or {}).get("id")
             if uname and chat_id:
-                # Salvăm maparea pentru utilizări viitoare
-                try:
-                    supabase.table("telegram_users").upsert(
-                        {"username": uname, "chat_id": chat_id, "activ": True},
-                        on_conflict="username"
-                    ).execute()
-                except Exception:
-                    pass
-                if uname == username:
-                    return chat_id
+                # Salvăm maparea pentru utilizări viitoare (o dată per rulare)
+                if uname not in _cache_chat_id:
+                    try:
+                        supabase.table("telegram_users").upsert(
+                            {"username": uname, "chat_id": chat_id, "activ": True},
+                            on_conflict="username"
+                        ).execute()
+                    except Exception:
+                        pass
+                _cache_chat_id[uname] = chat_id
     except Exception as e:
         print(f"⚠️ Eroare la getUpdates Telegram: {e}")
 
-    return None
+    return _cache_chat_id.get(username)
 
 
 def trimite_telegram_text(contact, mesaj):
@@ -89,29 +106,18 @@ def trimite_telegram(contact, avarie):
     """Trimite mesajul Telegram. Returnează True DOAR dacă Telegram a confirmat
     livrarea (ok=true). La eșec, notificarea nu se marchează ca trimisă, deci se
     reîncearcă la următoarea rulare."""
-    data = avarie.get("data") or "?"
-    serviciu = avarie.get("serviciu") or "apa"
-    eticheta = ETICHETE_SERVICIU.get(serviciu, serviciu)
-    tip = avarie.get("tip_intrerupere")
-    eticheta_tip = "📅 Deconectare programată" if tip == "programata" else "⚡ Întrerupere accidentală"
-    status_afisat = STATUSURI_AFISATE.get(avarie.get("status"), avarie.get("status", "?"))
-    anulata = avarie.get("status") == "ANULATA"
-    zona = avarie['strada'] or avarie.get('cartier') or "Toată localitatea"
-    judet = avarie.get("judet") or ""
-    locatie = avarie['localitate']
-    if judet and serviciu == "curent":
-        locatie = f"{avarie['localitate']} (jud. {judet})"
-    data_inceput = avarie.get('data_inceput') or ""
-    data_sfarsit = avarie.get('data_sfarsit') or ""
-    interval = (f"{data_inceput} - {data_sfarsit}").strip(" -")
+    date = pregateste_context(avarie)
     mesaj = (
-        f"🚨 *Alertă {eticheta}*\n"
-        f"*📅 Data: {data}*\n"
-        f"*📍 Locație: {locatie}, {zona}*\n"
-        f"*Status: {status_afisat}*\n"
-        + (f"*Tip: {eticheta_tip}*\n" if tip else "")
-        + f"Interval: {interval}\n"
-        f"{avarie.get('descriere_text', '')}"
-        + ("\n🔕 *Anunțul a fost retras de operator — întreruperea NU mai are loc.*" if anulata else "")
+        f"🚨 *Alertă {date['eticheta_serviciu']}*\n"
+        f"*📅 Data: {escape_markdown(date['data'] or '?')}*\n"
+        f"*📍 Locație: {escape_markdown(date['locatie'])}, {escape_markdown(date['zona'])}*\n"
+        f"*Status: {escape_markdown(date['status_afisat'])}*\n"
+        + (f"*Tip: {date['eticheta_tip']}*\n" if date["tip"] else "")
+        + (f"Interval: {escape_markdown(date['interval'])}\n" if date["interval"] else "")
+        + f"{escape_markdown(date['descriere'])}"
+        + (
+            "\n🔕 *Anunțul a fost retras de operator — întreruperea NU mai are loc.*"
+            if date["anulata"] else ""
+        )
     )
     return trimite_telegram_text(contact, mesaj)

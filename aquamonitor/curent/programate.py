@@ -11,7 +11,7 @@ import requests
 
 from ..config import supabase
 from ..db import citeste_toate
-from ..notificari.abonati import notifica_abonatii
+from ..notificari.abonati import notifica_abonatii, sterge_notificari_pentru_avarie
 from ..utils import azi_bucuresti, normalizeaza_text
 from .comun import LOCALITATI_CONSTANTA, judet_canonizat
 
@@ -373,7 +373,7 @@ def sincronizeaza_intreruperi_programate():
             # Ștergem marcajele de notificare ca abonații care au primit anunțul
             # inițial să primească și anunțul de retragere (notifica_abonatii
             # ar sări peste ei altfel, din cauza deduplicării).
-            supabase.table("notificari_trimise").delete().eq("avarie_id", r["id"]).execute()
+            sterge_notificari_pentru_avarie(r["id"])
             r["status"] = "ANULATA"
             notifica_abonatii(r)
             nr_retrase += 1

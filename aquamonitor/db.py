@@ -11,13 +11,17 @@ eroare de cheie duplicata.
 LIMITA_PAGINA = 1000
 
 
-def citeste_toate(construieste_interogarea):
+def citeste_toate(construieste_interogarea, ordoneaza_dupa="id"):
     """Ruleaza o interogare Supabase paginata si intoarce TOATE randurile.
 
     Primeste o funcție care construieste interogarea, nu interogarea in sine:
     `.range()` modifica obiectul builder in loc sa intoarca unul nou, deci
     reapelarea lui pe acelasi obiect ar aduna parametri `offset`/`limit`
     duplicati in cerere.
+
+    Ordonarea nu e optionala: PostgREST nu garanteaza aceeasi ordine intre doua
+    cereri, iar tabela e scrisa chiar de procesul care o citeste. Fara `.order()`
+    un rand inserat intre pagini poate fi citit de doua ori sau sărit.
 
     Exemplu:
         randuri = citeste_toate(
@@ -27,7 +31,10 @@ def citeste_toate(construieste_interogarea):
     randuri = []
     start = 0
     while True:
-        raspuns = construieste_interogarea().range(start, start + LIMITA_PAGINA - 1).execute()
+        interogare = construieste_interogarea()
+        if ordoneaza_dupa:
+            interogare = interogare.order(ordoneaza_dupa)
+        raspuns = interogare.range(start, start + LIMITA_PAGINA - 1).execute()
         bucata = raspuns.data or []
         randuri.extend(bucata)
         if len(bucata) < LIMITA_PAGINA:
