@@ -237,21 +237,20 @@ def sincronizeaza_intreruperi_programate():
         # Citire paginata: tabela are peste 1000 de randuri de curent, iar un
         # raspuns trunchiat ar face randurile lipsa sa para noi (inserarea lor ar
         # da eroare de cheie duplicata, iar retragerile ar fi ratate).
+        # Filtrul pe prefix se aplica in interogare, nu in Python: din cele ~1150
+        # de randuri de curent ne intereseaza doar deconectarile programate.
         randuri_curent = citeste_toate(
             lambda: supabase.table("avarii").select(
                 "id,sursa_url,status,data_inceput,data_sfarsit,descriere_text,"
                 "localitate,judet,detalii_anunt,strada,cartier,data,tip_intrerupere,serviciu"
-            ).eq("serviciu", "curent")
+            ).eq("serviciu", "curent").like("sursa_url", "pdfprog:%")
         )
     except Exception as e:
         print(f"⚠️ Eroare la citirea deconectărilor programate: {e}")
         return
 
-    pdf_randuri = {}
-    for r in randuri_curent:
-        u = r.get("sursa_url") or ""
-        if u.startswith("pdfprog:"):
-            pdf_randuri[u[len("pdfprog:"):]] = r
+    # Filtrul din interogare garantează prefixul, deci tăiem direct.
+    pdf_randuri = {r["sursa_url"][len("pdfprog:"):]: r for r in randuri_curent}
 
     # 1. Deconectările a căror zi a trecut se închid.
     for cod, r in pdf_randuri.items():

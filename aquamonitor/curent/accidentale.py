@@ -142,13 +142,16 @@ def sincronizeaza_intreruperi_curent():
         # Citire paginata: tabela are peste 1000 de randuri de curent, iar un
         # raspuns trunchiat ar face randurile lipsa sa para noi (si inserarea lor
         # ar da eroare de cheie duplicata).
+        # Filtrul pe prefix se aplica in interogare, nu in Python: din cele ~1150
+        # de randuri de curent ne intereseaza doar cele venite din acest feed.
         randuri_curent = citeste_toate(
             lambda: supabase.table("avarii")
-            .select("id,sursa_url,status,tip_intrerupere").eq("serviciu", "curent")
+            .select("id,sursa_url,status,tip_intrerupere")
+            .eq("serviciu", "curent")
+            .like("sursa_url", "retele:%")
         )
         for r in randuri_curent:
-            if (r.get("sursa_url") or "").startswith("retele:"):
-                existente[r["sursa_url"][7:]] = r
+            existente[r["sursa_url"][7:]] = r
     except Exception as e:
         print(f"⚠️ Eroare la citirea întreruperilor existente: {e}")
         return
@@ -196,17 +199,25 @@ def sincronizeaza_intreruperi_curent():
         except Exception as ex:
             print(f"❌ Eroare la salvarea întreruperii {e['cod']}: {ex}")
 
-    # Marchează rezolvate întreruperile care nu mai apar în feed
+    # Marchează rezolvate întreruperile care nu mai apar în feed.
+    # Le marcăm în tranșe: un apel per rând însemna zeci de cereri HTTP
+    # secvențiale degeaba, dar un singur `.in_()` cu sute de id-uri ar face un
+    # URL prea lung pentru PostgREST.
     acum = acum_bucuresti().strftime("%d/%m/%Y %H:%M")
+    de_rezolvat = [
+        rand["id"] for cod, rand in existente.items()
+        if cod not in coduri_active and rand.get("status") != "REMEDIAT"
+    ]
+    TRANSA = 100
     nr_rezolvate = 0
-    for cod, rand in existente.items():
-        if cod not in coduri_active and rand.get("status") != "REMEDIAT":
-            try:
-                supabase.table("avarii").update(
-                    {"status": "REMEDIAT", "data_sfarsit": acum}
-                ).eq("id", rand["id"]).execute()
-                nr_rezolvate += 1
-            except Exception as ex:
-                print(f"❌ Eroare la marcarea rezolvare {cod}: {ex}")
+    for i in range(0, len(de_rezolvat), TRANSA):
+        transa = de_rezolvat[i:i + TRANSA]
+        try:
+            supabase.table("avarii").update(
+                {"status": "REMEDIAT", "data_sfarsit": acum}
+            ).in_("id", transa).execute()
+            nr_rezolvate += len(transa)
+        except Exception as ex:
+            print(f"❌ Eroare la marcarea întreruperilor rezolvate: {ex}")
     if nr_rezolvate:
         print(f"✅ {nr_rezolvate} întreruperi de energie electrică rezolvate.")
