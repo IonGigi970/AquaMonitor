@@ -158,13 +158,25 @@ def notifica_abonatii(avarie_salvata):
         and normalizeaza_text(a.get("localitate_interes")) == localitate_norm
     ]
 
+    if not abonamente:
+        # Nicio zonă abonată nu acoperă această localitate: ieșim înainte de a
+        # încărca marcajele din notificari_trimise (interogare pe toată tabela),
+        # care altfel ar fi fost făcută pentru fiecare avarie fără abonați.
+        return
+
+    # Județul avariei e același pentru toate abonamentele, deci îl normalizăm o
+    # singură dată, nu la fiecare iterație.
+    judet_avarie = (
+        normalizeaza_text(avarie_salvata.get("judet") or "")
+        if serviciu == SERVICIU_CURENT else ""
+    )
+
     for abonament in abonamente:
         abonament_id = abonament.get("id")
         # Filtru pe județ (doar la energie electrică — aceeași localitate poate
         # exista în mai multe județe, ex: Mihail Kogălniceanu). Abonamentele fără
         # județ salvat (cele vechi, dinainte de migrarea 010) primesc din toate.
         if serviciu == SERVICIU_CURENT:
-            judet_avarie = normalizeaza_text(avarie_salvata.get("judet") or "")
             judet_abonament = normalizeaza_text(abonament.get("judet") or "")
             if judet_abonament and (not judet_avarie or judet_avarie != judet_abonament):
                 continue
