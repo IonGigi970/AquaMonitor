@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AquaMonitor CT — Avarii apă Constanța",
-  description: "Monitorizează avariile de apă RAJA în timp real și primește alerte pe zonele tale de interes.",
+  title: "AquaMonitor CT — Avarii apă și curent în Constanța",
+  description:
+    "Monitorizează avariile de apă și întreruperile de energie electrică din Constanța în timp real și primește alerte pe zonele tale de interes.",
   icons: {
     icon: "/icon.svg",
   },
@@ -23,7 +24,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="en"
+      lang="ro"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>

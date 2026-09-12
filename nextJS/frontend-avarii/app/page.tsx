@@ -1,256 +1,200 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
-import type { User } from '@supabase/supabase-js';
-import dynamic from 'next/dynamic';
-import { formateazaData } from '@/lib/format';
-
-const MapComponent = dynamic(() => import('../components/mapComponent'), { 
-  ssr: false,
-  loading: () => <div className="w-full min-h-[500px] flex items-center justify-center bg-slate-100 rounded-3xl text-slate-500">Se încarcă harta...</div>
-});
-
-const supabase = createClient();
-
-interface Avarie {
-  id?: string;
-  localitate: string;
-  strada: string;
-  cartier?: string | null;
-  status: string;
-  descriere_text: string;
-  data_inceput?: string;
-  data_sfarsit?: string;
-  data?: string | null;
-  sursa_url?: string | null;
-  latitudine?: number;
-  longitudine?: number;
-}
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import SiteHeader from "@/components/siteHeader";
+import SiteFooter from "@/components/siteFooter";
+import { SERVICII } from "@/lib/servicii";
+import { useUser } from "@/lib/useUser";
 
 export default function Home() {
-  const router = useRouter();
-  const [avarii, setAvarii] = useState<Avarie[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [eroareFetch, setEroareFetch] = useState("");
-  const [user, setUser] = useState<User | null>(null);
-  const [arataToate, setArataToate] = useState(false);
-
-  const alerteVizibile = arataToate ? avarii : avarii.slice(0, 5);
+  // Numărul de avarii active per serviciu, afișat pe carduri.
+  // undefined = încă se încarcă; null = serviciul nu a răspuns.
+  const [contoare, setContoare] = useState<Record<string, number | null>>({});
+  const { user, incarcat } = useUser();
 
   useEffect(() => {
-    async function fetchAvarii() {
-      try {
-        const res = await fetch('/api/avarii');
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          setEroareFetch(body.error || `Eroare HTTP ${res.status}`);
-        } else {
-          const data = await res.json();
-          setAvarii(data);
-        }
-      } catch (err) {
-        setEroareFetch(err instanceof Error ? err.message : "Eroare la încărcarea avariilor.");
-      }
-      setLoading(false);
+    async function incarcaContoarele() {
+      const rezultate = await Promise.all(
+        SERVICII.map(async (serviciu) => {
+          try {
+            const res = await fetch(`/api/avarii?serviciu=${serviciu.cheie}`);
+            if (!res.ok) return [serviciu.cheie, null] as const;
+            const date = await res.json();
+            return [serviciu.cheie, Array.isArray(date) ? date.length : null] as const;
+          } catch {
+            return [serviciu.cheie, null] as const;
+          }
+        })
+      );
+      setContoare(Object.fromEntries(rezultate));
     }
-    fetchAvarii();
+    incarcaContoarele();
   }, []);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
-
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => {
-      subscription.subscription.unsubscribe();
-    };
-  }, []);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/');
-    router.refresh();
-  };
 
   return (
-    <div className="bg-slate-50 min-h-screen flex flex-col relative">
-      <nav className="bg-blue-700 text-white p-4 shadow-lg sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="text-2xl font-bold flex items-center gap-2 tracking-tight">
-                AquaMonitor CT
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-3 md:gap-6 font-semibold">
+    <div className="bg-slate-50 min-h-screen flex flex-col">
+      <SiteHeader />
+
+      {/* Zona de întâmpinare */}
+      <section className="bg-gradient-to-br from-blue-700 via-blue-600 to-sky-500 text-white">
+        <div className="max-w-7xl mx-auto px-4 py-14 md:py-20 flex flex-col items-center text-center">
+          <span className="bg-white/15 backdrop-blur px-4 py-1.5 rounded-full text-sm font-semibold mb-5">
+            📡 Date preluate automat, la fiecare 15 minute
+          </span>
+
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight max-w-3xl">
+            Știi din timp când rămâi fără apă sau curent
+          </h1>
+
+          <p className="mt-5 text-lg md:text-xl text-blue-50 max-w-2xl">
+            AquaMonitor CT adună avariile și întreruperile anunțate de operatori și îți trimite
+            alertă pe zona ta de interes — pe email sau pe Telegram, gratuit.
+          </p>
+
+          <div className="mt-8 flex flex-col sm:flex-row gap-3">
+            {incarcat && user ? (
+              <>
                 <Link
-                  href="/curent"
-                  className="hover:text-amber-300 transition-colors text-blue-100 px-2 py-1"
+                  href="/avarii"
+                  className="bg-white text-blue-700 px-7 py-3.5 rounded-xl font-semibold shadow-lg hover:bg-blue-50 transition-colors"
                 >
-                  ⚡ Energie electrică
+                  Vezi situația avariilor
                 </Link>
                 <Link
                   href="/membership"
-                  className="hover:text-blue-200 transition-colors text-blue-100 px-2 py-1"
+                  className="bg-blue-900/40 hover:bg-blue-900/60 border border-white/30 px-7 py-3.5 rounded-xl font-semibold transition-colors"
                 >
                   🔔 Alertele mele
                 </Link>
+              </>
+            ) : (
+              <>
                 <Link
-                  href="/sustine"
-                  className="bg-amber-400 text-amber-950 px-5 py-2.5 rounded-xl shadow hover:bg-amber-300 transition-all transform hover:scale-105 flex items-center gap-2"
+                  href="/register"
+                  className="bg-white text-blue-700 px-7 py-3.5 rounded-xl font-semibold shadow-lg hover:bg-blue-50 transition-colors"
                 >
-                    ☕ Susține Proiectul
+                  Creează cont gratuit
                 </Link>
-                {user ? (
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-blue-100 hidden md:inline">{user.email}</span>
-                    <button
-                      onClick={handleLogout}
-                      className="bg-white/10 hover:bg-white/20 transition-colors px-4 py-2 rounded-xl"
-                    >
-                      Logout
-                    </button>
+                <Link
+                  href="/login"
+                  className="bg-blue-900/40 hover:bg-blue-900/60 border border-white/30 px-7 py-3.5 rounded-xl font-semibold transition-colors"
+                >
+                  Autentificare
+                </Link>
+              </>
+            )}
+          </div>
+
+          <p className="mt-5 text-sm text-blue-100">
+            Nu-ți cerem date personale. Te poți dezabona oricând, dintr-un singur click.
+          </p>
+        </div>
+      </section>
+
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-12 md:py-16 flex flex-col gap-14">
+        {/* Serviciile monitorizate */}
+        <section>
+          <h2 className="text-2xl md:text-3xl font-bold text-slate-800 text-center">
+            Ce monitorizăm
+          </h2>
+          <p className="text-slate-600 text-center mt-2">
+            Alege un serviciu ca să vezi situația pe hartă și în listă.
+          </p>
+
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+            {SERVICII.map((serviciu) => {
+              const nr = contoare[serviciu.cheie];
+              return (
+                <Link
+                  key={serviciu.cheie}
+                  href={serviciu.href}
+                  className={`bg-white rounded-3xl border-2 p-7 shadow-sm hover:shadow-lg transition-all flex flex-col ${serviciu.accent}`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <span className="text-4xl" aria-hidden="true">
+                      {serviciu.iconita}
+                    </span>
+                    {nr === undefined ? (
+                      <span className="text-xs font-semibold text-slate-400">
+                        se încarcă...
+                      </span>
+                    ) : nr === null ? (
+                      <span className="text-xs font-semibold text-slate-400">
+                        indisponibil momentan
+                      </span>
+                    ) : (
+                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-white border border-current">
+                        {nr} {nr === 1 ? "avarie activă" : "avarii active"}
+                      </span>
+                    )}
                   </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <Link
-                      href="/login"
-                      className="text-blue-100 hover:text-white transition-colors px-3 py-2"
-                    >
-                      Login
-                    </Link>
-                    <Link
-                      href="/register"
-                      className="bg-white text-blue-700 px-4 py-2 rounded-xl shadow hover:bg-blue-50 transition-colors"
-                    >
-                      Sign up
-                    </Link>
-                  </div>
-                )}
-            </div>
-        </div>
-      </nav>
 
-      <div className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="col-span-1 flex flex-col gap-6">
-            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                Situația la zi
-            </h2>
-            <div className="space-y-4 overflow-y-auto pr-2 max-h-[600px]">
-              {loading ? (
-                <p className="text-slate-500">Se încarcă datele...</p>
-              ) : eroareFetch ? (
-                <p className="text-red-600 text-sm bg-red-50 p-3 rounded-xl">Eroare la încărcare: {eroareFetch}</p>
-              ) : avarii.length === 0 ? (
-                <p className="text-slate-500">Nu există avarii active.</p>
-              ) : (
-                <>
-                  {alerteVizibile.map((item, index) => (
-                    <a
-                      key={item.id || index}
-                      href={item.sursa_url || "#"}
-                      target={item.sursa_url ? "_blank" : undefined}
-                      rel="noopener noreferrer"
-                      className={`block bg-white p-5 rounded-2xl shadow-sm border-l-4 hover:shadow-md transition-shadow relative overflow-hidden ${item.status === 'AVARIE' ? 'border-red-500' : 'border-amber-400'}`}
-                    >
-                        <div className={`absolute top-0 right-0 text-xs font-bold px-3 py-1 rounded-bl-lg ${item.status === 'AVARIE' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>
-                          {item.status}
-                        </div>
-                        <h3 className="font-bold text-lg text-slate-800 mt-2">{item.localitate}</h3>
-                        <p className="text-sm font-semibold text-slate-700 mt-1">
-                          {item.strada || item.cartier || "Toată localitatea"}
-                        </p>
+                  <h3 className="text-xl font-bold text-slate-800 mt-5">{serviciu.eticheta}</h3>
+                  <p className="text-sm text-slate-600 mt-2 flex-1">{serviciu.descriere}</p>
 
-                        {item.data && (
-                          <div className="flex items-center gap-2 text-xs font-bold text-blue-700 mt-3 bg-blue-50 p-2 rounded-lg">
-                            📅 {formateazaData(item.data)}
-                          </div>
-                        )}
+                  <span className="mt-6 font-semibold text-blue-700">Vezi situația →</span>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
 
-                        {(item.data_inceput || item.data_sfarsit) && (
-                          <div className="flex items-center gap-2 text-xs text-slate-500 mt-3 bg-slate-50 p-2 rounded-lg">
-                              ⏱️ {item.data_inceput || "?"} - {item.data_sfarsit || "?"}
-                          </div>
-                        )}
-                        <p className="text-xs text-slate-600 mt-3 leading-relaxed">{item.descriere_text}</p>
-                        {item.sursa_url && (
-                          <p className="text-xs text-blue-600 mt-2 font-semibold">
-                            Vezi comunicatul oficial RAJA →
-                          </p>
-                        )}
-                    </a>
-                  ))}
+        {/* Cum funcționează */}
+        <section className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 md:p-10">
+          <h2 className="text-2xl md:text-3xl font-bold text-slate-800 text-center">
+            Cum funcționează
+          </h2>
 
-                  {avarii.length > 5 && (
-                    <button
-                      onClick={() => setArataToate((v) => !v)}
-                      className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors"
-                    >
-                      {arataToate ? "Arată mai puține" : `Arată mai multe (${avarii.length - 5})`}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-        </div>
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              {
+                pas: "1",
+                titlu: "Îți alegi zona",
+                text: "Localitatea, strada sau cartierul care te interesează — nu tot județul.",
+              },
+              {
+                pas: "2",
+                titlu: "Primești alerta",
+                text: "Când apare o avarie în zona ta, îți trimitem un mesaj pe email sau pe Telegram.",
+              },
+              {
+                pas: "3",
+                titlu: "Te dezabonezi ușor",
+                text: "Oprești alertele oricând, din pagina „Alertele mele”. Fără cont de operator, fără costuri.",
+              },
+            ].map((item) => (
+              <div key={item.pas} className="flex flex-col items-center text-center">
+                <span className="w-12 h-12 rounded-full bg-blue-600 text-white font-bold text-xl flex items-center justify-center shadow-md">
+                  {item.pas}
+                </span>
+                <h3 className="font-bold text-lg text-slate-800 mt-4">{item.titlu}</h3>
+                <p className="text-sm text-slate-600 mt-2 max-w-xs">{item.text}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
-        <div className="col-span-1 lg:col-span-2 flex flex-col bg-white rounded-3xl shadow-sm border border-slate-200 isolate">
-            <div className="p-4 md:p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <h2 className="text-lg font-bold text-slate-800">Harta Avariilor</h2>
-            </div>
-            <div className="relative w-full flex-1 min-h-[500px] rounded-b-3xl overflow-hidden">
-              <MapComponent avarii={avarii} />
-            </div>
-        </div>
-      </div>
-
-      <footer className="bg-blue-700 text-white mt-8">
-        <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-center">
-          <div className="flex flex-col items-center">
-            <h3 className="font-bold text-lg mb-2">AquaMonitor CT</h3>
-            <p className="text-sm text-blue-100 max-w-xs">
-              Monitorizăm avariile de apă RAJA din Constanța și împrejurimi, în timp real.
+        {/* Susținerea proiectului */}
+        <section className="bg-gradient-to-r from-amber-400 to-amber-300 rounded-3xl p-8 md:p-10 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+          <div className="text-center md:text-left">
+            <h2 className="text-2xl font-bold text-amber-950">Susții proiectul?</h2>
+            <p className="text-amber-900 mt-2 max-w-xl">
+              AquaMonitor CT este un proiect independent, făcut pe timpul liber și ținut
+              gratuit pentru toată lumea. Dacă îți este de folos, o donație acoperă costurile
+              de întreținere.
             </p>
           </div>
-          <div className="flex flex-col items-center">
-            <h3 className="font-bold text-lg mb-2">Contact & Sugestii</h3>
-            <p className="text-sm text-blue-100">
-              Ai o sugestie sau o problemă? Scrie-ne la:
-            </p>
-            <a
-              href="mailto:aquamonitorct@gmail.com"
-              className="text-sm font-semibold text-amber-300 hover:text-amber-200 transition-colors inline-block mt-1"
-            >
-              aquamonitorct@gmail.com
-            </a>
-          </div>
-          <div className="flex flex-col items-center">
-            <h3 className="font-bold text-lg mb-2">Linkuri utile</h3>
-            <ul className="text-sm text-blue-100 space-y-1">
-              <li>
-                <Link href="/membership" className="hover:text-white transition-colors">
-                  Alertele mele
-                </Link>
-              </li>
-              <li>
-                <Link href="/sustine" className="hover:text-white transition-colors">
-                  Susține proiectul
-                </Link>
-              </li>
-              <li>
-                <Link href="/gdpr" className="hover:text-white transition-colors">
-                  Confidențialitate & Termeni
-                </Link>
-              </li>
-            </ul>
-          </div>
-        </div>
-        <div className="border-t border-blue-600 py-4 text-center text-xs text-blue-200">
-          © {new Date().getFullYear()} AquaMonitor CT. Proiect independent, neafiliat cu RAJA.
-        </div>
-      </footer>
+          <Link
+            href="/sustine"
+            className="shrink-0 bg-amber-950 text-amber-50 px-7 py-3.5 rounded-xl font-semibold shadow hover:bg-amber-900 transition-colors"
+          >
+            ☕ Susține Proiectul
+          </Link>
+        </section>
+      </main>
+
+      <SiteFooter />
     </div>
   );
 }

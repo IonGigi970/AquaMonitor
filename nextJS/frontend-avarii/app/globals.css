@@ -12,13 +12,10 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* Aplicația e proiectată exclusiv pe temă deschisă (carduri albe, text închis).
+   Regula de dark mode care înnegrea fundalul a fost eliminată: pe dispozitivele
+   setate pe mod întunecat făcea textul implicit deschis peste carduri albe,
+   adică text alb pe fundal alb. */
 body {
   background: var(--background);
   color: var(--foreground);
