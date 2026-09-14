@@ -1,0 +1,42 @@
+name: Teste bot Telegram
+
+# Rulează testele automate ale botului (offline: Supabase și Telegram sunt
+# înlocuite cu duble de test, deci nu se atinge nicio bază de date reală) și
+# lint-ul, doar când se schimbă frontend-ul — ca să nu consume minute Actions
+# degeaba la fiecare modificare de scraper.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "nextJS/frontend-avarii/**"
+      - ".github/workflows/teste-bot.yml"
+  pull_request:
+    paths:
+      - "nextJS/frontend-avarii/**"
+
+jobs:
+  teste:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nextJS/frontend-avarii
+    steps:
+      - name: Checkout cod
+        uses: actions/checkout@v5
+
+      - name: Configureaza Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: nextJS/frontend-avarii/package-lock.json
+
+      - name: Instaleaza dependentele
+        run: npm ci
+
+      - name: Ruleaza testele botului
+        run: npm test
+
+      - name: Ruleaza lint
+        run: npm run lint
