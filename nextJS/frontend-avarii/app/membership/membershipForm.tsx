@@ -79,6 +79,24 @@ export default function MembershipForm({
       cartier_interes: normalizeazaText(form.cartier_interes),
     };
 
+    const { data: existente } = await supabase
+      .from("abonamente")
+      .select("id")
+      .eq("activ", true)
+      .eq("serviciu", dateCuratate.serviciu)
+      .eq("tip_contact", dateCuratate.tip_contact)
+      .eq("valoare_contact", dateCuratate.valoare_contact)
+      .eq("localitate_interes", dateCuratate.localitate_interes)
+      .eq("strada_interes", dateCuratate.strada_interes)
+      .eq("cartier_interes", dateCuratate.cartier_interes)
+      .limit(1);
+
+    if (existente && existente.length > 0) {
+      setSeSalveaza(false);
+      setMesaj({ text: "Ai deja un abonament identic activ.", tip: "error" });
+      return;
+    }
+
     const { error } = await supabase.from("abonamente").insert([dateCuratate]);
 
     setSeSalveaza(false);

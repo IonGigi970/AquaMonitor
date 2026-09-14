@@ -23,13 +23,13 @@ from .telegram import trimite_telegram, trimite_telegram_text
 # coloanele nefolosite, de mai multe ori pe rulare.
 COLOANE_ABONAMENT = (
     "id,activ,serviciu,judet,tip_contact,valoare_contact,"
-    "localitate_interes,strada_interes,cartier_interes"
+    "localitate_interes,strada_interes,cartier_interes,created_at"
 )
 
 # Coloanele de care avem nevoie cand reluam notificarile pentru o avarie.
 COLOANE_AVARIE = (
     "id,serviciu,localitate,strada,cartier,status,descriere_text,data_inceput,"
-    "data_sfarsit,data,sursa_url,tip_intrerupere,judet,detalii_anunt"
+    "data_sfarsit,data,sursa_url,tip_intrerupere,judet,detalii_anunt,data_adaugarii"
 )
 
 # Abonamente care au primit deja notificare pentru un comunicat sursă (în această rulare).
@@ -239,6 +239,11 @@ def notifica_abonatii(avarie_salvata):
         cartier_abonament = normalizeaza_text(abonament.get("cartier_interes") or "")
 
         if not se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, cartier_norm, text_zona):
+            continue
+
+        abonament_creat = abonament.get("created_at") or ""
+        avarie_adaugata = avarie_salvata.get("data_adaugarii") or ""
+        if abonament_creat and avarie_adaugata and avarie_adaugata < abonament_creat:
             continue
 
         # O singură notificare per abonament pentru același comunicat sursă: atât
