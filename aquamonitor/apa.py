@@ -12,6 +12,9 @@ from .geocodare import obtine_coordonate
 from .notificari.abonati import notifica_abonatii
 from .utils import azi_bucuresti
 
+# Ca mesajul "ai rulat migrarea 012?" să apară o singură dată, nu la fiecare articol.
+_marcare_avertizata = False
+
 def desparte_strazile(avarie):
     """Dacă strada conține mai multe străzi (separate prin virgulă), le despărțim în avarii separate."""
     strada = (avarie.get("strada") or "").strip()
@@ -31,6 +34,12 @@ def desparte_strazile(avarie):
 
 
 def salveaza_avarii(avarii_extrase, sursa_url, data_articol=None):
+    """Salvează avariile extrase și anunță abonații.
+
+    Întoarce (nr_salvate, nr_erori): apelantul decide dacă articolul poate fi
+    marcat ca procesat sau trebuie reîncercat la rularea următoare."""
+    nr_salvate = 0
+    nr_erori = 0
     for avarie in avarii_extrase:
         if not avarie.get("localitate"):
             continue
@@ -79,9 +88,13 @@ def salveaza_avarii(avarii_extrase, sursa_url, data_articol=None):
 
                 if rezultat.data:
                     print(f"✅ Salvat: {avarie_simpla['localitate']} - {zona} ({avarie_simpla['status']})")
+                    nr_salvate += 1
                     notifica_abonatii(rezultat.data[0])
             except Exception as e:
+                nr_erori += 1
                 print(f"❌ Eroare la salvarea în Supabase: {e}")
+
+    return nr_salvate, nr_erori
 
 
 def curata_avarii_vechi():
@@ -173,15 +186,39 @@ def preia_articole_avarii():
 
 
 def articol_deja_procesat(post_url):
-    rezultat = supabase.table("avarii").select("id").eq("sursa_url", post_url).limit(1).execute()
-    return bool(rezultat.data)
+    """True dacă articolul RAJA a fost deja procesat.
+
+    Marcajul stă în articole_procesate (migrarea 012) și acoperă și articolele
+    din care nu s-a extras nicio avarie — altfel acelea erau trimise la Gemini la
+    fiecare rulare, la nesfârșit. Cât timp migrarea nu e rulată în Supabase, se
+    cade înapoi pe verificarea veche (rând în avarii cu același sursa_url)."""
+    try:
+        rezultat = supabase.table("articole_procesate").select("url").eq("url", post_url).limit(1).execute()
+        return bool(rezultat.data)
+    except Exception:
+        rezultat = supabase.table("avarii").select("id").eq("sursa_url", post_url).limit(1).execute()
+        return bool(rezultat.data)
+
+
+def marcheaza_articol_procesat(post_url, nr_avarii):
+    """Marcăm articolul ca procesat, ca să nu mai fie trimis la AI la fiecare rulare."""
+    global _marcare_avertizata
+    try:
+        supabase.table("articole_procesate").upsert(
+            {"url": post_url, "nr_avarii": nr_avarii}, on_conflict="url"
+        ).execute()
+    except Exception as e:
+        if not _marcare_avertizata:
+            _marcare_avertizata = True
+            print(f"⚠️ Nu am putut marca articolele ca procesate ({e}). Ai rulat migrarea 012? "
+                  "Fără tabelă, articolele fără avarii sunt reprocesate la fiecare rulare.")
+
 
 def sincronizeaza_apa():
     """Preia articolele RAJA publicate azi, extrage avariile cu AI si le salveaza.
 
-    Articolele deja procesate (dupa URL) sunt sărite, ca sa nu duplicam avariile
-    si sa nu trimitem notificari repetate.
-    """
+    Articolele deja procesate (dupa URL, in articole_procesate) sunt sărite, ca sa
+    nu duplicam avariile si sa nu trimitem notificari repetate."""
     articole = preia_articole_avarii()
 
     for articol in articole:
@@ -192,7 +229,21 @@ def sincronizeaza_apa():
         print(f"🧠 Procesez articol nou: {articol['url']}")
         avarii_extrase = extrage_avarii_din_text(articol["text"])
 
+        if avarii_extrase is None:
+            # Eroare AI (nu „articol fără avarii"): NU marcăm articolul ca
+            # procesat, ca să fie reluat la rularea următoare.
+            print("⏭️  Extragerea AI a eșuat — articolul se reia la rularea următoare.")
+            continue
+
+        nr_salvate, nr_erori = 0, 0
         if avarii_extrase:
-            salveaza_avarii(avarii_extrase, articol["url"], articol.get("data"))
+            nr_salvate, nr_erori = salveaza_avarii(
+                avarii_extrase, articol["url"], articol.get("data"))
         else:
             print("ℹ️ Nu s-au extras avarii din acest articol.")
+
+        if nr_erori:
+            # Au fost erori la salvare: nu marcăm articolul, ca să nu pierdem avarii.
+            print(f"⏭️  Articolul nu a fost marcat ca procesat ({nr_erori} erori la salvare).")
+            continue
+        marcheaza_articol_procesat(articol["url"], nr_salvate)

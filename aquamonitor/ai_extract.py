@@ -5,7 +5,11 @@ import json
 from .config import MODEL_AI, client_genai
 
 def extrage_avarii_din_text(text_postare):
-    """Trimite textul UNUI SINGUR articol către Gemini și returnează lista de avarii extrase."""
+    """Trimite textul UNUI SINGUR articol către Gemini și returnează lista de avarii extrase.
+
+    Întoarce None (nu listă goală!) când apelul AI eșuează: apelantul trebuie să
+    poată distinge „articolul chiar nu conține avarii" (se marchează procesat) de
+    „a picat rețeaua/API-ul" (se reia la rularea următoare)."""
     prompt = f"""
     Analizează acest text despre avariile RAJA. Extrage TOATE zonele afectate și returnează-le într-un format JSON de tip ARRAY (listă de obiecte), fără markdown sau alte texte.
     Reguli de extracție:
@@ -49,7 +53,8 @@ def extrage_avarii_din_text(text_postare):
         avarii_extrase = json.loads(text_json)
         if isinstance(avarii_extrase, list):
             return avarii_extrase
+        print(f"❌ Răspuns AI neașteptat (nu e listă): {type(avarii_extrase).__name__}")
     except Exception as e:
         print(f"❌ Eroare la procesare AI: {e}")
 
-    return []
+    return None
