@@ -63,7 +63,7 @@ def trimite_email_gmail(destinatar, subiect, html):
         server.quit()
         return True
     except Exception as e:
-        print(f"⚠️ Eroare la trimiterea prin Gmail către {destinatar}: {e} — se va reîncerca.")
+        print(f"⚠️ Gmail a refuzat emailul către {destinatar}: {e}")
         return False
 
 
@@ -83,10 +83,19 @@ def trimite_log_admin(subiect, html):
 
 def trimite_email_html(destinatar, subiect, html):
     """Trimite un email HTML pe canalul configurat (Gmail SMTP dacă e disponibil —
-    varianta gratuită — altfel Resend). Returnează True DOAR dacă furnizorul a
-    acceptat mesajul. La eșec, apelantul decide dacă reîncearcă mai târziu."""
+    varianta gratuită — altfel Resend). Returnează True DOAR dacă un furnizor a
+    acceptat mesajul. La eșec, apelantul decide dacă reîncearcă mai târziu.
+
+    Dacă primul canal cade (parolă de aplicație revocată, cotă zilnică depășită,
+    API indisponibil), încercăm și al doilea înainte de a declara eșec: altfel o
+    singură configurație stricată oprește toate alertele, deși există un al doilea
+    canal funcțional."""
     if GMAIL_USER and GMAIL_APP_PASSWORD:
-        return trimite_email_gmail(destinatar, subiect, html)
+        if trimite_email_gmail(destinatar, subiect, html):
+            return True
+        if not RESEND_API_KEY:
+            return False
+        print(f"↪️  Gmail a refuzat emailul către {destinatar} — încerc prin Resend...")
 
     if not RESEND_API_KEY:
         print("⚠️ Niciun canal de email configurat (GMAIL_USER sau RESEND_API_KEY).")

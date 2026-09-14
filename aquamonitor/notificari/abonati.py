@@ -1,6 +1,7 @@
 """Potrivirea avariilor cu abonamentele si trimiterea alertelor catre abonati."""
 
 import re
+from datetime import timedelta
 
 from ..config import (
     CANAL_EMAIL,
@@ -14,6 +15,7 @@ from ..config import (
 )
 from ..db import citeste_toate
 from ..utils import azi_bucuresti, contine_substring, normalizeaza_text, zona_avariei
+from .context import escape_markdown
 from .email import trimite_email, trimite_email_html, trimite_log_admin
 from .telegram import trimite_telegram, trimite_telegram_text
 
@@ -34,6 +36,14 @@ COLOANE_AVARIE = (
 # Un anunț RAJA generează mai multe avarii (una per stradă + una per cartier/zonă);
 # fără acest set, abonatul ar primi un email per zonă din același comunicat.
 notificari_pe_sursa = set()
+
+# Aceleași perechi (abonament, comunicat), dar citite din baza de date. Setul de
+# mai sus trăiește doar cât procesul, iar marcajele din notificari_trimise țin
+# minte perechea (abonament, avarie) — nu comunicatul. Cum același comunicat
+# produce mai multe rânduri de avarie (una per zonă), fără harta de aici faza de
+# reîncercare ar trimite din nou același anunț, pentru altă zonă a lui, la
+# fiecare rulare următoare.
+_comunicate_notificate = None
 
 # Abonamentele active si notificarile deja trimise, incarcate o singura data per
 # proces (= o rulare de scraper) si tinute minte. Fara cache, fiecare avarie
@@ -71,8 +81,43 @@ def _a_fost_trimis(abonament_id, avarie_id):
     return (abonament_id, avarie_id) in _incarca_notificari_trimise()
 
 
-def _marcheaza_trimis(abonament_id, avarie_id):
+def _incarca_comunicate_notificate():
+    """Perechile (abonament, comunicat sursă) pentru care alerta a plecat deja.
+
+    notificari_trimise salvează doar (abonament, avarie), dar un comunicat
+    generează mai multe avarii. Traducem marcajele în (abonament, sursa_url) prin
+    harta avariilor, ca deduplicarea să țină și între rulări, nu doar în
+    interiorul aceleiași rulări (unde există notificari_pe_sursa).
+    """
+    global _comunicate_notificate
+    if _comunicate_notificate is None:
+        sursa_dupa_avarie = {
+            rand["id"]: rand["sursa_url"]
+            for rand in citeste_toate(
+                lambda: supabase.table("avarii").select("id,sursa_url")
+            )
+            if rand.get("sursa_url")
+        }
+        harta = {}
+        for abonament_id, avarie_id in _incarca_notificari_trimise():
+            sursa = sursa_dupa_avarie.get(avarie_id)
+            if sursa:
+                harta.setdefault(abonament_id, set()).add(sursa)
+        _comunicate_notificate = harta
+    return _comunicate_notificate
+
+
+def _a_primit_comunicatul(abonament_id, sursa_url):
+    """True dacă abonamentul a primit deja o alertă pentru același comunicat sursă."""
+    if not sursa_url:
+        return False
+    return sursa_url in _incarca_comunicate_notificate().get(abonament_id, ())
+
+
+def _marcheaza_trimis(abonament_id, avarie_id, sursa_url=None):
     _incarca_notificari_trimise().add((abonament_id, avarie_id))
+    if sursa_url and _comunicate_notificate is not None:
+        _comunicate_notificate.setdefault(abonament_id, set()).add(sursa_url)
 
 
 def sterge_notificari_pentru_avarie(avarie_id):
@@ -83,10 +128,13 @@ def sterge_notificari_pentru_avarie(avarie_id):
     Cache-ul se actualizează în același timp — altfel deduplicarea ar sări exact
     peste notificarea de retragere.
     """
+    global _comunicate_notificate
     supabase.table("notificari_trimise").delete().eq("avarie_id", avarie_id).execute()
     if _notificari_trimise is not None:
         for cheie in [c for c in _notificari_trimise if c[1] == avarie_id]:
             _notificari_trimise.discard(cheie)
+    # Harta pe comunicate se recalculează la nevoie, din marcajele rămase.
+    _comunicate_notificate = None
 
 
 def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, cartier_norm, text_zona=""):
@@ -187,8 +235,12 @@ def notifica_abonatii(avarie_salvata):
         if not se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, cartier_norm, text_zona):
             continue
 
-        # O singură notificare per abonament pentru același comunicat sursă
+        # O singură notificare per abonament pentru același comunicat sursă: atât
+        # în această rulare (notificari_pe_sursa), cât și în rulările anterioare
+        # (marcajele din baza de date, traduse pe comunicat).
         if sursa_url and (abonament_id, sursa_url) in notificari_pe_sursa:
+            continue
+        if _a_primit_comunicatul(abonament_id, sursa_url):
             continue
 
         # Verificăm dacă am trimis deja notificare pentru acest abonament + această
@@ -216,7 +268,7 @@ def notifica_abonatii(avarie_salvata):
             "abonament_id": abonament_id,
             "avarie_id": avarie_id,
         }).execute()
-        _marcheaza_trimis(abonament_id, avarie_id)
+        _marcheaza_trimis(abonament_id, avarie_id, sursa_url)
 
         if sursa_url:
             notificari_pe_sursa.add((abonament_id, sursa_url))
@@ -244,22 +296,24 @@ def reincearca_notificari_esuate():
     Când o trimitere eșuează (email refuzat, bot indisponibil), notificarea nu se
     marchează ca trimisă. La rulările următoare articolul e deja procesat și nu mai
     trece prin notifica_abonatii — fără această fază, notificarea eșuată s-ar pierde
-    definitiv. Reluăm notificarea pentru avariile de apă de azi + întreruperile de
-    curent încă active; deduplicarea din notificari_trimise (abonament+avarie) și
-    din notificari_pe_sursa garantează că nimeni nu primește de două ori aceeași
-    alertă."""
-    azi_str = azi_bucuresti().isoformat()
+    definitiv. Reluăm notificarea pentru avariile de apă din ultimele două zile +
+    întreruperile de curent încă active; deduplicarea din notificari_trimise
+    (abonament+avarie) și cea pe comunicatul sursă garantează că nimeni nu primește
+    de două ori aceeași alertă."""
+    azi = azi_bucuresti()
+    # Fereastră de două zile, nu doar ziua curentă: data unei avarii de apă vine din
+    # anunț (poate fi „mâine") sau din ziua publicării articolului, iar o notificare
+    # eșuată pentru o astfel de avarie trebuie reluată, nu pierdută.
+    de_la_str = (azi - timedelta(days=1)).isoformat()
     avarii_de_reluat = []
     try:
-        # Avarii apă publicate azi (mărginite la o singură zi, deci puține)
-        rezultat = (
-            supabase.table("avarii")
+        # Avarii apă din ultimele două zile (tabela se curăță după 2 zile, deci puține)
+        avarii_de_reluat.extend(citeste_toate(
+            lambda: supabase.table("avarii")
             .select(COLOANE_AVARIE)
             .eq("serviciu", SERVICIU_APA)
-            .eq("data", azi_str)
-            .execute()
-        )
-        avarii_de_reluat.extend(rezultat.data or [])
+            .gte("data", de_la_str)
+        ))
         # Întreruperi de curent încă active (indiferent de ziua începerii).
         # Citire paginată: pot depăși 1000 de rânduri, iar un răspuns trunchiat ar
         # sări exact avariile pentru care mai avem notificări de trimis.
@@ -336,9 +390,11 @@ def trimite_notificare_test(abonament_id):
         return trimite_email_html(contact, f"🔔 Notificare de test {eticheta} — {localitate}", html)
 
     if tip == CANAL_TELEGRAM:
+        # Localitatea și zona vin din datele abonatului: escapez caracterele care au
+        # sens în Markdown, altfel Telegram respinge mesajul cu 400 (nume cu „_" etc.).
         mesaj = (
             "🔔 *Notificare de test* — AquaMonitor CT\n\n"
-            f"Abonamentul tău: {eticheta} — {locatie}, {zona}.\n\n"
+            f"Abonamentul tău: {eticheta} — {escape_markdown(locatie)}, {escape_markdown(zona)}.\n\n"
             "Dacă primești acest mesaj, alertele funcționează corect pentru zona ta. "
             "Nu trebuie să faci nimic."
         )
