@@ -1,10 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { cleanEnv } from "@/lib/env";
 
-function cleanEnv(value?: string): string {
-  if (!value) return "";
-  return value.replace(/^\uFEFF/, "").trim();
-}
 
 const supabaseUrl = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const supabaseKey = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);

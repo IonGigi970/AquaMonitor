@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { cleanEnv } from "@/lib/env";
 
 // Declanșează workflow-ul GitHub Actions al scraper-ului în modul "test":
 // trimite o notificare de test către abonamentul cerut (același mecanism de
@@ -9,10 +10,6 @@ const GITHUB_OWNER = "IonGigi970";
 const GITHUB_REPO = "AquaMonitor";
 const GITHUB_WORKFLOW_FILE = "scraper.yml";
 
-function cleanEnv(value?: string): string {
-  if (!value) return "";
-  return value.replace(/^\uFEFF/, "").trim();
-}
 
 export async function POST(request: Request) {
   const supabase = await createClient();

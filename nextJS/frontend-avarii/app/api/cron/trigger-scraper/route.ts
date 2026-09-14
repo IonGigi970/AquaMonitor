@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cleanEnv } from "@/lib/env";
 
 // Endpoint apelat de un serviciu extern de cron (ex: cron-job.org) la interval fix.
 // Nu ruleaza el insusi scraper-ul, ci porneste workflow-ul GitHub Actions
@@ -10,10 +11,6 @@ const GITHUB_OWNER = "IonGigi970";
 const GITHUB_REPO = "AquaMonitor";
 const GITHUB_WORKFLOW_FILE = "scraper.yml";
 
-function cleanEnv(value?: string): string {
-  if (!value) return "";
-  return value.replace(/^\uFEFF/, "").trim();
-}
 
 async function handleTrigger(request: Request) {
   const cronSecret = cleanEnv(process.env.CRON_SECRET);
@@ -32,19 +29,6 @@ async function handleTrigger(request: Request) {
   const secretPrimit = secretDinHeader || secretDinQuery;
 
   if (secretPrimit !== cronSecret) {
-    // Diagnostic temporar (nu expune valorile, doar lungimi, ca sa gasim
-    // rapid cauza unei nepotriviri: spatiu/linie noua la copiere, sau
-    // variabila neactualizata inca in Vercel dupa redeploy).
-    if (url.searchParams.get("debug") === "1") {
-      return NextResponse.json(
-        {
-          error: "unauthorized",
-          lungime_primita: secretPrimit.length,
-          lungime_asteptata: cronSecret.length,
-        },
-        { status: 403 }
-      );
-    }
     return NextResponse.json({ error: "unauthorized" }, { status: 403 });
   }
 
