@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { cleanEnv } from "@/lib/env";
 
 // Webhook-ul botului @JimmyWaterBot. Pe lângă activarea/dezactivarea clasică
 // (/start, /stop), botul ține conversații pentru ABONAREA directă din Telegram:
@@ -12,10 +13,6 @@ import { NextResponse } from 'next/server';
 // memorie între apeluri). Abonamentele create au user_id NULL și sunt legate de
 // utilizator prin valoare_contact (@username).
 
-function cleanEnv(value?: string): string {
-  if (!value) return "";
-  return value.replace(/^\uFEFF/, "").trim();
-}
 
 const supabaseUrl = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const supabaseServiceKey = cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -100,6 +97,20 @@ function descriereZona(ab: Record<string, unknown>): string {
 
 export async function POST(request: Request) {
   try {
+    // Secretul webhook-ului: Telegram îl trimite în antetul
+    // X-Telegram-Bot-Api-Secret-Token, dar doar dacă webhook-ul a fost înregistrat
+    // CU secret_token (vezi set_webhook.py). Verificarea se face doar când
+    // variabila e configurată, ca să nu rupă botul dacă lipsește din mediu.
+    // ATENȚIE la ordinea de activare: întâi se înregistrează webhook-ul cu
+    // secret (set_webhook.py), apoi se setează TELEGRAM_WEBHOOK_SECRET în Vercel.
+    const webhookSecret = cleanEnv(process.env.TELEGRAM_WEBHOOK_SECRET);
+    if (webhookSecret) {
+      const primit = request.headers.get('x-telegram-bot-api-secret-token') || '';
+      if (primit !== webhookSecret) {
+        return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+      }
+    }
+
     const update = await request.json();
     const message = update?.message || update?.edited_message;
     if (!message) {
