@@ -1,5 +1,7 @@
 """Emailuri: trimitere prin Gmail SMTP (gratuit) sau Resend, plus logurile admin."""
 
+import html
+import os
 import smtplib
 from email.message import EmailMessage
 
@@ -12,6 +14,7 @@ from ..config import (
     RESEND_API_KEY,
     RESEND_FROM_EMAIL,
 )
+from ..utils import acum_bucuresti
 from .context import pregateste_context
 
 
@@ -79,6 +82,56 @@ def trimite_log_admin(subiect, html):
     trimis, motiv = trimite_resend(ADMIN_EMAIL, subiect, html)
     if not trimis:
         print(f"⚠️ Resend a refuzat log-ul admin: {motiv}")
+
+
+def _link_rulare_github():
+    """Link către rularea curentă de pe GitHub Actions, dacă rulăm acolo.
+
+    Variabilele sunt puse de GitHub Actions; local nu există, deci linkul lipsește.
+    """
+    server = os.getenv("GITHUB_SERVER_URL")
+    depozit = os.getenv("GITHUB_REPOSITORY")
+    rulare = os.getenv("GITHUB_RUN_ID")
+    if server and depozit and rulare:
+        return f"{server}/{depozit}/actions/runs/{rulare}"
+    return ""
+
+
+def trimite_alerta_eroare(erori):
+    """Anunță adminul că rularea scraperului a avut erori.
+
+    `erori` e o listă de (nume_fază, traceback_complet). Emailul conține textul
+    exact al erorii, ca să nu fie nevoie de căutat în logurile GitHub Actions
+    (care nu sunt accesibile pe API fără drepturi de admin).
+    """
+    if not ADMIN_EMAIL:
+        return
+
+    if len(erori) == 1:
+        subiect = f"❌ Eroare scraper AquaMonitor: {erori[0][0]}"
+    else:
+        subiect = f"❌ {len(erori)} erori la rularea scraperului AquaMonitor"
+
+    bucati = [
+        "<p><b>⚠️ Rularea scraperului a avut erori la "
+        f"{acum_bucuresti().strftime('%d.%m.%Y, ora %H:%M')}.</b></p>"
+        "<p>Restul fazelor au rulat în continuare — o eroare nu oprește toată rularea.</p>"
+    ]
+    for nume, detaliu in erori:
+        # Traceback-ul poate conține caractere HTML (<class ...>, &, >): escapat,
+        # altfel emailul se strica vizual exact când ai cea mai mare nevoie de el.
+        if len(detaliu) > 4000:
+            detaliu = detaliu[:4000] + "\n… (mesaj trunchiat)"
+        bucati.append(
+            f"<p><b>❌ {html.escape(nume)}</b></p>"
+            "<pre style='background:#f6f6f6;padding:8px;white-space:pre-wrap'>"
+            f"{html.escape(detaliu)}</pre>"
+        )
+    link = _link_rulare_github()
+    if link:
+        bucati.append(f"<p><a href='{link}'>Vezi rularea pe GitHub</a></p>")
+
+    trimite_log_admin(subiect, "".join(bucati))
 
 
 def trimite_email_html(destinatar, subiect, html):
