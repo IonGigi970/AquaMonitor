@@ -15,7 +15,7 @@ from ..config import (
     supabase,
 )
 from ..db import citeste_toate
-from ..notificari.abonati import notifica_abonatii
+from ..notificari.abonati import notifica_abonatii, sterge_notificari_pentru_avarie
 from ..utils import acum_bucuresti, normalizeaza_text
 from .comun import LOCALITATI_CONSTANTA, judet_canonizat
 
@@ -187,11 +187,18 @@ def sincronizeaza_intreruperi_curent():
                 # Deja activă în baza noastră: actualizăm datele curente
                 supabase.table("avarii").update(campuri).eq("id", rand["id"]).execute()
             elif rand:
-                # A reapărut după rezolvare: o reactivăm
+                # A reapărut după rezolvare: o reactivăm și anunțăm abonații,
+                # la fel ca la deconectările programate care reapar. Marcajele de
+                # notificare ale rundei anterioare se șterg, altfel deduplicarea
+                # ar sări exact peste abonații care trebuie anunțați că a
+                # reapărut întreruperea.
                 supabase.table("avarii").update({
                     **campuri, "status": STATUS_AVARIE,
                 }).eq("id", rand["id"]).execute()
-                print(f"⚡ Reapariție întrerupere {e['cod']} ({e['localitate']} {e['cartier']}).")
+                sterge_notificari_pentru_avarie(rand["id"])
+                reactivata = {**rand, **campuri, "status": STATUS_AVARIE}
+                print(f"⚡ Reapariție întrerupere {e['cod']} ({e['localitate']} {e['cartier']}) — abonații sunt anunțați.")
+                notifica_abonatii(reactivata)
             else:
                 inserat = supabase.table("avarii").insert({
                     **campuri,

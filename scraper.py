@@ -26,6 +26,7 @@ from aquamonitor.curent.programate import sincronizeaza_intreruperi_programate
 from aquamonitor.notificari.abonati import (
     reincearca_notificari_esuate,
     trimite_notificare_test,
+    trimite_rezumat_rulare,
 )
 
 
@@ -41,6 +42,9 @@ def ruleaza_scanare():
     # Faza de reîncercare: notificările eșuate la rulările anterioare
     # (sau chiar în această rulare) sunt reluate acum.
     reincearca_notificari_esuate()
+
+    # Un singur email către admin, cu tot ce s-a livrat în această rulare.
+    trimite_rezumat_rulare()
 
 
 if __name__ == "__main__":

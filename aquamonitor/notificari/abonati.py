@@ -45,6 +45,12 @@ notificari_pe_sursa = set()
 # fiecare rulare următoare.
 _comunicate_notificate = None
 
+# Notificările livrate în această rulare, pentru emailul-rezumat către admin.
+# Un email de log per notificare consuma singur cota zilnică a Gmail (zeci de
+# abonați pe o avarie, la fiecare 15 minute); le strângem aici și trimitem unul
+# singur la finalul rulării — vezi trimite_rezumat_rulare(), apelat din scraper.py.
+_jurnal_notificari = []
+
 # Abonamentele active si notificarile deja trimise, incarcate o singura data per
 # proces (= o rulare de scraper) si tinute minte. Fara cache, fiecare avarie
 # (pana la ~350 pe rulare) facea propriile interogari catre Supabase: una pentru
@@ -273,21 +279,54 @@ def notifica_abonatii(avarie_salvata):
         if sursa_url:
             notificari_pe_sursa.add((abonament_id, sursa_url))
 
-        # Log admin: cine a fost notificat, pentru ce zonă și pe ce canal
+        # Log admin: cine a fost notificat, pentru ce zonă și pe ce canal.
+        # Nu trimitem email aici (ar fi unul per abonament) — adăugăm în jurnal,
+        # iar la finalul rulării pleacă un singur email-rezumat.
         canal = {CANAL_EMAIL: "Email", CANAL_TELEGRAM: "Telegram"}.get(tip, str(tip))
         zona = zona_avariei(avarie_salvata)
         strada_abonament = abonament.get("strada_interes") or ""
-        trimite_log_admin(
-            f"📨 Notificare trimisă: {avarie_salvata.get('localitate')} - {zona}",
-            f"<p><b>Notificare trimisă</b></p>"
-            f"<p><b>📍 Zonă:</b> {avarie_salvata.get('localitate')}, {zona}</p>"
-            f"<p><b>Status:</b> {avarie_salvata.get('status')}</p>"
-            f"<p><b>📅 Data:</b> {avarie_salvata.get('data') or 'azi'}</p>"
-            f"<p><b>👤 Către:</b> {contact}</p>"
-            f"<p><b>📡 Canal:</b> {canal}</p>"
-            f"<p><b>🗺️ Zona abonată:</b> {abonament.get('localitate_interes')}"
-            f"{' - ' + strada_abonament if strada_abonament else ''}</p>"
-        )
+        _jurnal_notificari.append({
+            "localitate": avarie_salvata.get("localitate"),
+            "zona": zona,
+            "status": avarie_salvata.get("status"),
+            "data": avarie_salvata.get("data") or "azi",
+            "contact": contact,
+            "canal": canal,
+            "zona_abonata": abonament.get("localitate_interes"),
+            "strada_abonata": strada_abonament,
+        })
+
+
+def trimite_rezumat_rulare():
+    """Trimite adminului UN SINGUR email cu notificările livrate în această rulare.
+
+    Înlocuiește vechiul log per notificare: la fiecare 15 minute, cu mai mulți
+    abonați pe o avarie, emailurile de log consumau singure cota zilnică Gmail și
+    prelungeau rularea. Apelat la final, din scraper.py — după faza de reîncercare,
+    ca să includă și notificările reluate.
+    """
+    if not _jurnal_notificari:
+        return
+    randuri = "".join(
+        "<tr>"
+        f"<td>{n['localitate']}, {n['zona']}</td>"
+        f"<td>{n['status']}</td>"
+        f"<td>{n['data']}</td>"
+        f"<td>{n['contact']}</td>"
+        f"<td>{n['canal']}</td>"
+        f"<td>{n['zona_abonata']}{' - ' + n['strada_abonata'] if n['strada_abonata'] else ''}</td>"
+        "</tr>"
+        for n in _jurnal_notificari
+    )
+    trimite_log_admin(
+        f"📨 {len(_jurnal_notificari)} notificări trimise în această rulare",
+        "<p><b>Notificări livrate abonaților în această rulare:</b></p>"
+        "<table border='1' cellpadding='4' cellspacing='0'>"
+        "<tr><th>Zonă avarie</th><th>Status</th><th>Data</th><th>Către</th>"
+        "<th>Canal</th><th>Zonă abonată</th></tr>"
+        f"{randuri}</table>",
+    )
+    print(f"📨 Rezumat trimis adminului: {len(_jurnal_notificari)} notificări livrate.")
 
 
 def reincearca_notificari_esuate():
