@@ -1,15 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
-// Webhook-ul botului @JimmyWaterBot. Pe lÃ¢ngÄƒ activarea/dezactivarea clasicÄƒ
-// (/start, /stop), botul È›ine conversaÈ›ii pentru ABONAREA directÄƒ din Telegram:
-//   /aboneaza  â€” flux: serviciu (apÄƒ / energie electricÄƒ) â†’ judeÈ› (doar curent)
-//                â†’ localitate â†’ stradÄƒ (opÈ›ional) â†’ cartier (opÈ›ional) â†’ confirmare
-//   /abonamente â€” lista abonamentelor tale active
-//   /dezaboneaza â€” dezactivezi un abonament dupÄƒ numÄƒr
-//   /comenzi   â€” ajutor
-// Starea conversaÈ›iei stÄƒ Ã®n tabela telegram_conversatii (serverless = fÄƒrÄƒ
-// memorie Ã®ntre apeluri). Abonamentele create au user_id NULL È™i sunt legate de
+// Webhook-ul botului @JimmyWaterBot. Pe lângă activarea/dezactivarea clasică
+// (/start, /stop), botul ține conversații pentru ABONAREA directă din Telegram:
+//   /aboneaza  — flux: serviciu (apă / energie electrică) → județ (doar curent)
+//                → localitate → stradă (opțional) → cartier (opțional) → confirmare
+//   /abonamente — lista abonamentelor tale active
+//   /dezaboneaza — dezactivezi un abonament după număr
+//   /comenzi   — ajutor
+// Starea conversației stă în tabela telegram_conversatii (serverless = fără
+// memorie între apeluri). Abonamentele create au user_id NULL și sunt legate de
 // utilizator prin valoare_contact (@username).
 
 function cleanEnv(value?: string): string {
@@ -22,17 +22,17 @@ const supabaseServiceKey = cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY);
 const botToken = cleanEnv(process.env.TELEGRAM_BOT_TOKEN);
 
 const JUDETE = [
-  "Alba", "Arad", "ArgeÈ™", "BacÄƒu", "Bihor", "BistriÈ›a-NÄƒsÄƒud", "BotoÈ™ani",
-  "BraÈ™ov", "BrÄƒila", "BucureÈ™ti", "BuzÄƒu", "CaraÈ™-Severin", "CÄƒlÄƒraÈ™i", "Cluj",
-  "ConstanÈ›a", "Covasna", "DÃ¢mboviÈ›a", "Dolj", "GalaÈ›i", "Giurgiu", "Gorj",
-  "Harghita", "Hunedoara", "IalomiÈ›a", "IaÈ™i", "Ilfov", "MaramureÈ™", "MehedinÈ›i",
-  "MureÈ™", "NeamÈ›", "Olt", "Prahova", "Satu Mare", "SÄƒlaj", "Sibiu", "Suceava",
-  "Teleorman", "TimiÈ™", "Tulcea", "Vaslui", "VÃ¢lcea", "Vrancea",
+  "Alba", "Arad", "Argeș", "Bacău", "Bihor", "Bistrița-Năsăud", "Botoșani",
+  "Brașov", "Brăila", "București", "Buzău", "Caraș-Severin", "Călărași", "Cluj",
+  "Constanța", "Covasna", "Dâmbovița", "Dolj", "Galați", "Giurgiu", "Gorj",
+  "Harghita", "Hunedoara", "Ialomița", "Iași", "Ilfov", "Maramureș", "Mehedinți",
+  "Mureș", "Neamț", "Olt", "Prahova", "Satu Mare", "Sălaj", "Sibiu", "Suceava",
+  "Teleorman", "Timiș", "Tulcea", "Vaslui", "Vâlcea", "Vrancea",
 ];
 
 const ETICHETE_SERVICIU: Record<string, string> = {
-  apa: "ðŸ’§ ApÄƒ (RAJA)",
-  curent: "âš¡ Energie electricÄƒ",
+  apa: "💧 Apă (RAJA)",
+  curent: "⚡ Energie electrică",
 };
 
 function normalizeazaText(text: string): string {
@@ -56,8 +56,8 @@ function gasesteJudet(text: string): string | null {
 
 function gasesteServiciu(text: string): "apa" | "curent" | null {
   const t = normalizeazaText(text);
-  if (t.includes("apa") || t === "1" || t.includes("ðŸ’§")) return "apa";
-  if (t.includes("energie") || t.includes("curent") || t.includes("electric") || t === "2" || t.includes("âš¡")) return "curent";
+  if (t.includes("apa") || t === "1" || t.includes("💧")) return "apa";
+  if (t.includes("energie") || t.includes("curent") || t.includes("electric") || t === "2" || t.includes("⚡")) return "curent";
   return null;
 }
 
@@ -94,7 +94,7 @@ function descriereZona(ab: Record<string, unknown>): string {
   const bucati = [capitalize(String(ab.localitate_interes ?? ""))];
   if (ab.strada_interes) bucati.push(`strada ${capitalize(String(ab.strada_interes))}`);
   if (ab.cartier_interes) bucati.push(`cartierul ${capitalize(String(ab.cartier_interes))}`);
-  if (!ab.strada_interes && !ab.cartier_interes) bucati.push("toatÄƒ localitatea");
+  if (!ab.strada_interes && !ab.cartier_interes) bucati.push("toată localitatea");
   return bucati.join(", ");
 }
 
@@ -143,13 +143,13 @@ export async function POST(request: Request) {
       );
     };
 
-    // â”€â”€ Comenzi globale â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Comenzi globale ──────────────────────────────────────────────────────
     const esteDezabonare = ["/stop", "/dezabonare", "stop", "dezabonare"].includes(textLower);
     if (esteDezabonare) {
       upsertData.activ = false;
       await supabase.from("telegram_users").upsert(upsertData, { onConflict: "username" });
       await stergeConversatie();
-      await trimiteMesaj(chatId, "ðŸ”• NotificÄƒrile sunt oprite. CÃ¢nd vrei sÄƒ reprimeÈ™ti alertele, scrie /start.");
+      await trimiteMesaj(chatId, "🔕 Notificările sunt oprite. Când vrei să reprimești alertele, scrie /start.");
       return NextResponse.json({ ok: true });
     }
 
@@ -158,13 +158,13 @@ export async function POST(request: Request) {
       await supabase.from("telegram_users").upsert(upsertData, { onConflict: "username" });
       await stergeConversatie();
       const salut =
-        "ðŸ‘‹ Salut! Te-ai reactivat â€” alertele tale Ã®È›i vor ajunge din nou aici.\n\n" +
+        "👋 Salut! Te-ai reactivat — alertele tale îți vor ajunge din nou aici.\n\n" +
         "Comenzile mele:\n" +
-        "/aboneaza â€” abonament nou (apÄƒ sau energie electricÄƒ)\n" +
-        "/abonamente â€” vezi abonamentele active\n" +
-        "/dezaboneaza â€” dezactivezi un abonament\n" +
-        "/comenzi â€” aceastÄƒ listÄƒ\n" +
-        "/stop â€” opreÈ™te toate notificÄƒrile";
+        "/aboneaza — abonament nou (apă sau energie electrică)\n" +
+        "/abonamente — vezi abonamentele active\n" +
+        "/dezaboneaza — dezactivezi un abonament\n" +
+        "/comenzi — această listă\n" +
+        "/stop — oprește toate notificările";
       await trimiteMesaj(chatId, salut);
       return NextResponse.json({ ok: true });
     }
@@ -177,15 +177,15 @@ export async function POST(request: Request) {
 
     const esteComanda = text.startsWith("/");
 
-    // â”€â”€ Comenzi noi â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Comenzi noi ──────────────────────────────────────────────────────────
     if (textLower === "/comenzi" || textLower === "/help" || textLower === "/ajutor") {
       const ajutor =
-        "ðŸ“‹ *Comenzi*\n\n" +
-        "/aboneaza â€” abonament nou (apÄƒ sau energie electricÄƒ)\n" +
-        "/abonamente â€” vezi abonamentele active\n" +
-        "/dezaboneaza â€” dezactivezi un abonament\n" +
-        "/start â€” reactiveazÄƒ notificÄƒrile\n" +
-        "/stop â€” opreÈ™te toate notificÄƒrile";
+        "📋 *Comenzi*\n\n" +
+        "/aboneaza — abonament nou (apă sau energie electrică)\n" +
+        "/abonamente — vezi abonamentele active\n" +
+        "/dezaboneaza — dezactivezi un abonament\n" +
+        "/start — reactivează notificările\n" +
+        "/stop — oprește toate notificările";
       await trimiteMesaj(chatId, ajutor);
       return NextResponse.json({ ok: true });
     }
@@ -194,16 +194,16 @@ export async function POST(request: Request) {
       if (!username) {
         await trimiteMesaj(
           chatId,
-          "âš ï¸ Nu am gÄƒsit un @username la contul tÄƒu.\n" +
-            "Deschide Telegram â†’ Settings â†’ Edit profile È™i seteazÄƒ un Username, apoi Ã®ncearcÄƒ din nou /aboneaza."
+          "⚠️ Nu am găsit un @username la contul tău.\n" +
+            "Deschide Telegram → Settings → Edit profile și setează un Username, apoi încearcă din nou /aboneaza."
         );
         return NextResponse.json({ ok: true });
       }
       await salveazaConversatie("serviciu", {});
       await trimiteMesaj(
         chatId,
-        "ðŸ›Žï¸ Pentru ce serviciu vrei alerte?",
-        [["ðŸ’§ ApÄƒ (RAJA)"], ["âš¡ Energie electricÄƒ"]]
+        "🛎️ Pentru ce serviciu vrei alerte?",
+        [["💧 Apă (RAJA)"], ["⚡ Energie electrică"]]
       );
       return NextResponse.json({ ok: true });
     }
@@ -221,14 +221,14 @@ export async function POST(request: Request) {
 
     if (textLower === "/abonamente") {
       if (!username) {
-        await trimiteMesaj(chatId, "âš ï¸ SeteazÄƒ un @username Ã®n profilul Telegram ca sÄƒ pot gÄƒsi abonamentele tale.");
+        await trimiteMesaj(chatId, "⚠️ Setează un @username în profilul Telegram ca să pot găsi abonamentele tale.");
         return NextResponse.json({ ok: true });
       }
       const abonamente = await listaAbonamente();
       if (abonamente.length === 0) {
         await trimiteMesaj(
           chatId,
-          "ðŸ“­ Nu ai niciun abonament activ. Scrie /aboneaza ca sÄƒ adaugi unul."
+          "📭 Nu ai niciun abonament activ. Scrie /aboneaza ca să adaugi unul."
         );
         return NextResponse.json({ ok: true });
       }
@@ -236,35 +236,35 @@ export async function POST(request: Request) {
         (a, i) =>
           `${i + 1}. ${ETICHETE_SERVICIU[String(a.serviciu)] ?? a.serviciu}` +
           (a.judet ? ` (${a.judet})` : "") +
-          ` â€” ${descriereZona(a)}`
+          ` — ${descriereZona(a)}`
       );
-      await trimiteMesaj(chatId, "ðŸ“‹ *Abonamentele tale active:*\n\n" + randuri.join("\n"));
+      await trimiteMesaj(chatId, "📋 *Abonamentele tale active:*\n\n" + randuri.join("\n"));
       return NextResponse.json({ ok: true });
     }
 
     if (textLower === "/dezaboneaza") {
       if (!username) {
-        await trimiteMesaj(chatId, "âš ï¸ SeteazÄƒ un @username Ã®n profilul Telegram ca sÄƒ pot gÄƒsi abonamentele tale.");
+        await trimiteMesaj(chatId, "⚠️ Setează un @username în profilul Telegram ca să pot găsi abonamentele tale.");
         return NextResponse.json({ ok: true });
       }
       const abonamente = await listaAbonamente();
       if (abonamente.length === 0) {
-        await trimiteMesaj(chatId, "ðŸ“­ Nu ai niciun abonament activ de dezactivat.");
+        await trimiteMesaj(chatId, "📭 Nu ai niciun abonament activ de dezactivat.");
         return NextResponse.json({ ok: true });
       }
       const randuri = abonamente.map(
         (a, i) =>
           `${i + 1}. ${ETICHETE_SERVICIU[String(a.serviciu)] ?? a.serviciu}` +
           (a.judet ? ` (${a.judet})` : "") +
-          ` â€” ${descriereZona(a)}`
+          ` — ${descriereZona(a)}`
       );
       await salveazaConversatie("dezaboneaza", {
         lista_ids: abonamente.map((a) => a.id),
       });
       await trimiteMesaj(
         chatId,
-        "ðŸ”½ Care abonament vrei sÄƒ-l dezactivezi?\n\n" + randuri.join("\n") +
-          "\n\nScrie doar numÄƒrul (sau 0 ca sÄƒ anulezi)."
+        "🔽 Care abonament vrei să-l dezactivezi?\n\n" + randuri.join("\n") +
+          "\n\nScrie doar numărul (sau 0 ca să anulezi)."
       );
       return NextResponse.json({ ok: true });
     }
@@ -272,12 +272,12 @@ export async function POST(request: Request) {
     if (esteComanda) {
       await trimiteMesaj(
         chatId,
-        "ðŸ¤” Nu cunosc comanda asta. Scrie /comenzi ca sÄƒ vezi ce pot face."
+        "🤔 Nu cunosc comanda asta. Scrie /comenzi ca să vezi ce pot face."
       );
       return NextResponse.json({ ok: true });
     }
 
-    // â”€â”€ ConversaÈ›ia Ã®n curs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Conversația în curs ──────────────────────────────────────────────────
     const { data: conv } = await supabase
       .from("telegram_conversatii")
       .select("pas, date")
@@ -285,8 +285,8 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (!conv) {
-      // Mesaj liber fÄƒrÄƒ conversaÈ›ie activÄƒ: sugerÄƒm comenzile.
-      await trimiteMesaj(chatId, "Scrie /comenzi ca sÄƒ vezi ce pot face.");
+      // Mesaj liber fără conversație activă: sugerăm comenzile.
+      await trimiteMesaj(chatId, "Scrie /comenzi ca să vezi ce pot face.");
       return NextResponse.json({ ok: true });
     }
 
@@ -295,7 +295,7 @@ export async function POST(request: Request) {
 
     const anuleaza = async (motiv?: string) => {
       await stergeConversatie();
-      await trimiteMesaj(chatId, motiv ? motiv : "ðŸ‘Œ Am anulat. Scrie /comenzi dacÄƒ ai nevoie de ajutor.");
+      await trimiteMesaj(chatId, motiv ? motiv : "👌 Am anulat. Scrie /comenzi dacă ai nevoie de ajutor.");
     };
 
     if (pas === "serviciu") {
@@ -303,8 +303,8 @@ export async function POST(request: Request) {
       if (!serviciu) {
         await trimiteMesaj(
           chatId,
-          "Nu am Ã®nÈ›eles. Alege un serviciu:",
-          [["ðŸ’§ ApÄƒ (RAJA)"], ["âš¡ Energie electricÄƒ"]]
+          "Nu am înțeles. Alege un serviciu:",
+          [["💧 Apă (RAJA)"], ["⚡ Energie electrică"]]
         );
         return NextResponse.json({ ok: true });
       }
@@ -312,14 +312,14 @@ export async function POST(request: Request) {
         await salveazaConversatie("judet", { serviciu });
         await trimiteMesaj(
           chatId,
-          "ðŸ“Œ ÃŽn ce judeÈ›? (ex: ConstanÈ›a, TimiÈ™, BucureÈ™ti)\n\n" +
-            "Alertele de energie electricÄƒ sunt naÈ›ionale â€” localitÄƒÈ›i cu acelaÈ™i nume existÄƒ Ã®n mai multe judeÈ›e."
+          "📌 În ce județ? (ex: Constanța, Timiș, București)\n\n" +
+            "Alertele de energie electrică sunt naționale — localități cu același nume există în mai multe județe."
         );
       } else {
         await salveazaConversatie("localitate", { serviciu });
         await trimiteMesaj(
           chatId,
-          "ðŸ™ï¸ ÃŽn ce localitate stai? (ex: ConstanÈ›a, Lumina, Ovidiu)"
+          "🏙️ În ce localitate stai? (ex: Constanța, Lumina, Ovidiu)"
         );
       }
       return NextResponse.json({ ok: true });
@@ -330,25 +330,25 @@ export async function POST(request: Request) {
       if (!judet) {
         await trimiteMesaj(
           chatId,
-          "ðŸ¤” Nu recunosc judeÈ›ul. Scrie numele complet (ex: â€žConstanÈ›aâ€ sau â€žSatu Mareâ€)."
+          "🤔 Nu recunosc județul. Scrie numele complet (ex: „Constanța” sau „Satu Mare”)."
         );
         return NextResponse.json({ ok: true });
       }
       await salveazaConversatie("localitate", { ...date, judet });
-      await trimiteMesaj(chatId, `ðŸ™ï¸ ÃŽn ce localitate din judeÈ›ul ${judet}?`);
+      await trimiteMesaj(chatId, `🏙️ În ce localitate din județul ${judet}?`);
       return NextResponse.json({ ok: true });
     }
 
     if (pas === "localitate") {
       const localitate = normalizeazaText(text);
       if (!localitate) {
-        await trimiteMesaj(chatId, "Scrie numele localitÄƒÈ›ii, te rog.");
+        await trimiteMesaj(chatId, "Scrie numele localității, te rog.");
         return NextResponse.json({ ok: true });
       }
       await salveazaConversatie("strada", { ...date, localitate });
       await trimiteMesaj(
         chatId,
-        "ðŸ›£ï¸ Pe ce stradÄƒ (opÈ›ional)?\n\nScrie numele strÄƒzii sau â€ž-â€ dacÄƒ vrei alerte pentru toatÄƒ localitatea."
+        "🛣️ Pe ce stradă (opțional)?\n\nScrie numele străzii sau „-” dacă vrei alerte pentru toată localitatea."
       );
       return NextResponse.json({ ok: true });
     }
@@ -358,7 +358,7 @@ export async function POST(request: Request) {
       await salveazaConversatie("cartier", { ...date, strada });
       await trimiteMesaj(
         chatId,
-        "ðŸ˜ï¸ ÃŽn ce cartier/zonÄƒ (opÈ›ional)?\n\nScrie numele sau â€ž-â€ dacÄƒ nu e cazul."
+        "🏘️ În ce cartier/zonă (opțional)?\n\nScrie numele sau „-” dacă nu e cazul."
       );
       return NextResponse.json({ ok: true });
     }
@@ -372,18 +372,18 @@ export async function POST(request: Request) {
         `${date.localitate}${judet}` +
         (date.strada ? `, strada ${date.strada}` : "") +
         (cartier ? `, cartierul ${cartier}` : "") +
-        (!date.strada && !cartier ? " â€” toatÄƒ localitatea" : "");
+        (!date.strada && !cartier ? " — toată localitatea" : "");
       await salveazaConversatie("confirmare", { ...date, cartier });
       await trimiteMesaj(
         chatId,
-        `ðŸ“ ConfirmÄƒ abonamentul:\n\n${eticheta}\nðŸ“ ${zona}`,
-        [["âœ… Da, aboneazÄƒ-mÄƒ"], ["âŒ AnuleazÄƒ"]]
+        `📝 Confirmă abonamentul:\n\n${eticheta}\n📍 ${zona}`,
+        [["✅ Da, abonează-mă"], ["❌ Anulează"]]
       );
       return NextResponse.json({ ok: true });
     }
 
     if (pas === "confirmare") {
-      const confirmat = /da|ok|confirm|âœ…|aboneaza/.test(textLower);
+      const confirmat = /da|ok|confirm|✅|aboneaza/.test(textLower);
       if (!confirmat) {
         await anuleaza();
         return NextResponse.json({ ok: true });
@@ -401,7 +401,7 @@ export async function POST(request: Request) {
         activ: true,
       };
 
-      // EvitÄƒm duplicatele: acelaÈ™i serviciu + aceeaÈ™i zonÄƒ, deja activ.
+      // Evităm duplicatele: același serviciu + aceeași zonă, deja activ.
       const { data: existente } = await supabase
         .from("abonamente")
         .select("id")
@@ -415,22 +415,22 @@ export async function POST(request: Request) {
         .limit(1);
 
       if ((existente || []).length > 0) {
-        await anuleaza("â„¹ï¸ Ai deja un abonament identic activ â€” nu l-am dublat.");
+        await anuleaza("ℹ️ Ai deja un abonament identic activ — nu l-am dublat.");
         return NextResponse.json({ ok: true });
       }
 
       const { error } = await supabase.from("abonamente").insert(abonamentNou);
       if (error) {
         console.error("Eroare inserare abonament bot:", error);
-        await anuleaza("âŒ Nu am reuÈ™it sÄƒ salvez abonamentul. ÃŽncearcÄƒ din nou mai tÃ¢rziu.");
+        await anuleaza("❌ Nu am reușit să salvez abonamentul. Încearcă din nou mai târziu.");
         return NextResponse.json({ ok: true });
       }
       await stergeConversatie();
       const eticheta = ETICHETE_SERVICIU[serviciu] ?? serviciu;
       await trimiteMesaj(
         chatId,
-        `âœ… Abonament activ!\n\n${eticheta}\nðŸ“ ${descriereZona(abonamentNou)}` +
-          "\n\nVei primi aici alertele pentru zona ta. DacÄƒ nu primeÈ™ti nimic, apasÄƒ /start ca sÄƒ te reactivezi."
+        `✅ Abonament activ!\n\n${eticheta}\n📍 ${descriereZona(abonamentNou)}` +
+          "\n\nVei primi aici alertele pentru zona ta. Dacă nu primești nimic, apasă /start ca să te reactivezi."
       );
       return NextResponse.json({ ok: true });
     }
@@ -439,7 +439,7 @@ export async function POST(request: Request) {
       const numar = parseInt(text, 10);
       const listaIds = (date.lista_ids as string[]) || [];
       if (!numar || numar < 1 || numar > listaIds.length) {
-        await anuleaza("ðŸ‘Œ Am anulat dezabonarea.");
+        await anuleaza("👌 Am anulat dezabonarea.");
         return NextResponse.json({ ok: true });
       }
       const { error } = await supabase
@@ -448,15 +448,15 @@ export async function POST(request: Request) {
         .eq("id", listaIds[numar - 1]);
       if (error) {
         console.error("Eroare dezactivare abonament bot:", error);
-        await anuleaza("âŒ Nu am reuÈ™it sÄƒ dezactivez abonamentul. ÃŽncearcÄƒ din nou.");
+        await anuleaza("❌ Nu am reușit să dezactivez abonamentul. Încearcă din nou.");
         return NextResponse.json({ ok: true });
       }
       await stergeConversatie();
-      await trimiteMesaj(chatId, "âœ… Abonament dezactivat. Scrie /aboneaza dacÄƒ vrei altul.");
+      await trimiteMesaj(chatId, "✅ Abonament dezactivat. Scrie /aboneaza dacă vrei altul.");
       return NextResponse.json({ ok: true });
     }
 
-    // PaÈ™ necunoscut: resetÄƒm conversaÈ›ia.
+    // Paș necunoscut: resetăm conversația.
     await anuleaza();
     return NextResponse.json({ ok: true });
   } catch (err) {

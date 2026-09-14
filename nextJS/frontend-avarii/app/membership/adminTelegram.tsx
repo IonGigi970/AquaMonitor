@@ -11,21 +11,19 @@ interface TelegramUser {
   activ: boolean;
 }
 
-export default function AdminTelegram({ userEmail }: { userEmail: string }) {
+export default function AdminTelegram() {
   const [users, setUsers] = useState<TelegramUser[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    fetch("/api/telegram/users", {
-      headers: { Authorization: `Bearer ${userEmail}` },
-    })
+    fetch("/api/telegram/users")
       .then(async (r) => {
         if (!r.ok) throw new Error(await r.text());
         return r.json();
       })
       .then((data) => setUsers(data.users || []))
       .catch((err) => setError(err.message));
-  }, [userEmail]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -36,7 +34,6 @@ export default function AdminTelegram({ userEmail }: { userEmail: string }) {
       const r = await fetch("/api/telegram/users/toggle", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${userEmail}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ username, activ: newState }),

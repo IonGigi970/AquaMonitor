@@ -35,7 +35,7 @@ export default function RegisterPage() {
 
     setSeIncarca(true);
 
-    const { error } = await supabase.auth.signUp({
+    const { data: dateCont, error } = await supabase.auth.signUp({
       email,
       password: parola,
       options: {
@@ -58,12 +58,13 @@ export default function RegisterPage() {
       "Cont creat cu succes! Verifică-ți emailul pentru a confirma adresa, apoi te poți autentifica."
     );
 
-    // Trimitem un log admin către emailul de administrare
+    // Trimitem un log admin către emailul de administrare (serverul acceptă
+    // cererea doar dacă ID-ul de utilizator primit aici chiar există).
     try {
       await fetch("/api/log-cont-nou", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, userId: dateCont.user?.id }),
       });
     } catch {
       // Ignorăm erorile de log — nu blocăm înregistrarea

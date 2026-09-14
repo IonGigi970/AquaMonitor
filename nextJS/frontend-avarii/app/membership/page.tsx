@@ -57,14 +57,14 @@ export default async function MembershipPage() {
               <h2 className="text-lg font-bold text-slate-800 mb-4">
                 Statistici (admin)
               </h2>
-              <AdminStats userEmail={data.user.email ?? ""} />
+              <AdminStats />
             </div>
 
             <div className="mt-8">
               <h2 className="text-lg font-bold text-slate-800 mb-4">
                 Utilizatori Telegram cu /start
               </h2>
-              <AdminTelegram userEmail={data.user.email ?? ""} />
+              <AdminTelegram />
             </div>
           </>
         )}

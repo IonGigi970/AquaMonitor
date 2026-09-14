@@ -48,21 +48,19 @@ function Card({ titlu, valoare, culoare }: { titlu: string; valoare: number | st
   );
 }
 
-export default function AdminStats({ userEmail }: { userEmail: string }) {
+export default function AdminStats() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/admin/stats", {
-      headers: { Authorization: `Bearer ${userEmail}` },
-    })
+    fetch("/api/admin/stats")
       .then(async (r) => {
         if (!r.ok) throw new Error(await r.text());
         return r.json();
       })
       .then(setStats)
       .catch((err) => setError(err.message));
-  }, [userEmail]);
+  }, []);
 
   if (error) return <p className="text-sm text-red-500">Eroare la încărcare statistici: {error}</p>;
   if (!stats) return <p className="text-sm text-slate-500">Se încarcă statisticile...</p>;
