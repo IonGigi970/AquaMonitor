@@ -291,6 +291,7 @@ def notifica_abonatii(avarie_salvata):
         zona = zona_avariei(avarie_salvata)
         strada_abonament = abonament.get("strada_interes") or ""
         _jurnal_notificari.append({
+            "serviciu": serviciu,
             "localitate": avarie_salvata.get("localitate"),
             "zona": zona,
             "status": avarie_salvata.get("status"),
@@ -314,6 +315,7 @@ def trimite_rezumat_rulare():
         return
     randuri = "".join(
         "<tr>"
+        f"<td>{ETICHETE_SERVICIU.get(n['serviciu'], n['serviciu'])}</td>"
         f"<td>{n['localitate']}, {n['zona']}</td>"
         f"<td>{n['status']}</td>"
         f"<td>{n['data']}</td>"
@@ -327,7 +329,7 @@ def trimite_rezumat_rulare():
         f"📨 {len(_jurnal_notificari)} notificări trimise în această rulare",
         "<p><b>Notificări livrate abonaților în această rulare:</b></p>"
         "<table border='1' cellpadding='4' cellspacing='0'>"
-        "<tr><th>Zonă avarie</th><th>Status</th><th>Data</th><th>Către</th>"
+        "<tr><th>Serviciu</th><th>Zonă avarie</th><th>Status</th><th>Data</th><th>Către</th>"
         "<th>Canal</th><th>Zonă abonată</th></tr>"
         f"{randuri}</table>",
     )
