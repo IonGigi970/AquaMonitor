@@ -150,35 +150,50 @@ def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, 
     Reguli:
     - Dacă abonatul nu are nici stradă, nici cartier → se potrivește cu orice avarie
       din localitatea lui (abonament pe toată localitatea).
+    - Dacă abonatul are DOAR cartier → se potrivește când cartierul apare în avarie
+      (comportamentul clasic, păstrat).
+    - Dacă abonatul are DOAR stradă → se potrivește când strada apare în avarie.
+    - Dacă abonatul are ȘI stradă ȘI cartier → AMBELE trebuie să se potrivească
+      (logică AND): avaria trebuie să fie în cartierul respectiv ȘI strada respectivă
+      să fie afectată. Un abonament pe „strada X, cartierul Y" nu primește alerte
+      pentru orice avarie de pe strada X, ci doar pentru cele din cartierul Y.
     - Potrivire bidirecțională pe subșir: acoperă nume scrise parțial de RAJA
-      (ex: abonat pe "Revoluției din 22 Decembrie 1989", anunț cu "Revoluției").
+      (ex: abonat pe „Revoluției din 22 Decembrie 1989", anunț cu „Revoluției").
     - Câmpurile se verifică încrucișat (cartierul abonatului în strada avariei și
       invers), ca să acopere abonamente vechi salvate în câmpul greșit.
     - Pentru deconectările programate zona reală stă în textul anunțului (detalii),
-      nu în câmpuri structurate: dacă text_zona e dat, termenul abonatului se caută
-      și acolo, la graniță de cuvânt (ex: cartier "viile noi" prinde "zona Viile Noi")."""
-    if cartier_abonament or strada_abonament:
-        potrivire = False
-        if cartier_abonament:
-            potrivire = (
-                contine_substring(cartier_abonament, cartier_norm)
-                or contine_substring(cartier_norm, cartier_abonament)
-                or contine_substring(cartier_abonament, strada_norm)
-                or contine_substring(strada_norm, cartier_abonament)
-            )
-        if strada_abonament and not potrivire:
-            potrivire = (
-                contine_substring(strada_abonament, strada_norm)
-                or contine_substring(strada_norm, strada_abonament)
-                or contine_substring(strada_abonament, cartier_norm)
-                or contine_substring(cartier_norm, strada_abonament)
-            )
-        if not potrivire and text_zona:
-            for termen in (cartier_abonament, strada_abonament):
-                if termen and re.search(r"(?<![a-z0-9])" + re.escape(termen) + r"(?![a-z0-9])", text_zona):
-                    return True
-        return potrivire
-    return True
+      nu în câmpuri structurate: dacă text_zona e dat, termenii abonatului se caută
+      și acolo, la graniță de cuvânt, cu aceeași logică (AND când ambele câmpuri
+      sunt completate, individual când e doar unul)."""
+    if not (cartier_abonament or strada_abonament):
+        return True
+
+    termeni = [t for t in (cartier_abonament, strada_abonament) if t]
+    mod_and = len(termeni) == 2
+
+    def _in_structuri(termen):
+        return (
+            contine_substring(termen, cartier_norm)
+            or contine_substring(cartier_norm, termen)
+            or contine_substring(termen, strada_norm)
+            or contine_substring(strada_norm, termen)
+        )
+
+    def _in_text(termen):
+        return bool(re.search(r"(?<![a-z0-9])" + re.escape(termen) + r"(?![a-z0-9])", text_zona))
+
+    potriviri_structurate = [_in_structuri(t) for t in termeni]
+    if mod_and and all(potriviri_structurate):
+        return True
+    if not mod_and and any(potriviri_structurate):
+        return True
+
+    if text_zona:
+        potriviri_text = [_in_text(t) for t in termeni]
+        if mod_and:
+            return all(potriviri_text)
+        return any(potriviri_text)
+    return False
 
 
 def notifica_abonatii(avarie_salvata):
