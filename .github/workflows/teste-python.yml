@@ -1,0 +1,39 @@
+name: Teste Python (potrivire notificari)
+
+# Rulează testul de potrivire abonament-avarie (test_potrivire.py) la fiecare
+# modificare a codului Python al scraperului. Testul e offline: folosește
+# placeholder-uri pentru credențiale, nu atinge baza de date reală.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "aquamonitor/**"
+      - "scraper.py"
+      - "test_potrivire.py"
+      - "requirements.txt"
+      - ".github/workflows/teste-python.yml"
+  pull_request:
+    paths:
+      - "aquamonitor/**"
+      - "scraper.py"
+      - "test_potrivire.py"
+      - "requirements.txt"
+
+jobs:
+  teste:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout cod
+        uses: actions/checkout@v5
+
+      - name: Configureaza Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Instaleaza dependentele
+        run: pip install -r requirements.txt
+
+      - name: Ruleaza testul de potrivire
+        run: python test_potrivire.py

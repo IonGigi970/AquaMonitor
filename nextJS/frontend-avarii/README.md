@@ -34,3 +34,19 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Teste
+
+Testele rulează automat în GitHub Actions la fiecare push (workflow-urile
+`teste-bot.yml` și `teste-python.yml`), dar pot fi rulate și local:
+
+```bash
+# Testele botului Telegram (offline, 26 de teste)
+npm test
+
+# Testul de potrivire abonament-avarie (offline, 24 de cazuri)
+# din rădăcina proiectului (unde e scraperul Python):
+python test_potrivire.py
+```
+
+Ambele suite sunt offline: nu ating baza de date reală și nu trimit notificări.
