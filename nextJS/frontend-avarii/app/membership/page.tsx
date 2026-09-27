@@ -18,6 +18,7 @@ export default async function MembershipPage() {
     .from("abonamente")
     .select("*")
     .eq("user_id", data.user.id)
+    .eq("activ", true)
     .order("created_at", { ascending: false });
 
   const adminEmails = (process.env.ADMIN_EMAILS || "aquamonitorct@gmail.com")

@@ -3,27 +3,7 @@
 import { useState, type SyntheticEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-
-// Funcție pentru curățarea textului (diacritice, litere mici, eliminare prefixe)
-// - reutilizată din app/page.tsx pentru consistență cu datele salvate de scraper.
-function normalizeazaText(text: string) {
-  if (!text) return "";
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/^(strada|str\.|bulevardul|bd\.|b-dul|alee|aleea|intrarea|cartier|cartierul)\s+/i, "")
-    .trim();
-}
-
-const JUDETE = [
-  "Alba", "Arad", "Argeș", "Bacău", "Bihor", "Bistrița-Năsăud", "Botoșani",
-  "Brașov", "Brăila", "București", "Buzău", "Caraș-Severin", "Călărași", "Cluj",
-  "Constanța", "Covasna", "Dâmbovița", "Dolj", "Galați", "Giurgiu", "Gorj",
-  "Harghita", "Hunedoara", "Ialomița", "Iași", "Ilfov", "Maramureș", "Mehedinți",
-  "Mureș", "Neamț", "Olt", "Prahova", "Satu Mare", "Sălaj", "Sibiu", "Suceava",
-  "Teleorman", "Timiș", "Tulcea", "Vaslui", "Vâlcea", "Vrancea",
-];
+import { JUDETE, normalizeazaText } from "@/lib/abonamente";
 
 export default function MembershipForm({
   userId,

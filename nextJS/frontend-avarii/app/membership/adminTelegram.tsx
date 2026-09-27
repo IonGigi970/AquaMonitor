@@ -52,7 +52,7 @@ export default function AdminTelegram() {
 
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200">
-      <table className="w-full text-sm text-left">
+      <table className="w-full text-sm text-left min-w-[640px]">
         <thead className="bg-slate-100 text-slate-700 font-semibold">
           <tr>
             <th className="px-4 py-2">Username</th>

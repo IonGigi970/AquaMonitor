@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { formateazaText } from "@/lib/format";
+import EditeazaAbonament from "./editeazaAbonament";
 
 interface Abonament {
   id: string;
@@ -72,8 +72,8 @@ export default function ListaAbonamente({
   userId: string;
 }) {
   const router = useRouter();
-  const supabase = createClient();
   const [seSterge, setSeSterge] = useState<string | null>(null);
+  const [editeazaId, setEditeazaId] = useState<string | null>(null);
   const [testStatus, setTestStatus] = useState<
     Record<string, "trimite" | "gata" | "eroare" | undefined>
   >({});
@@ -82,16 +82,28 @@ export default function ListaAbonamente({
   const handleDezabonare = async (id: string) => {
     setSeSterge(id);
 
-    const { error } = await supabase
-      .from("abonamente")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", userId);
+    // Dezabonarea trece prin API (service role): șterge abonamentul și, dacă e
+    // ultimul abonament Telegram activ al utilizatorului, îl marchează inactiv
+    // și în lista „Utilizatori Telegram" (sincronizare bidirecțională).
+    let ok = false;
+    try {
+      const raspuns = await fetch("/api/abonamente/dezaboneaza", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ abonament_id: id }),
+      });
+      ok = raspuns.ok;
+      if (!ok) {
+        const date = await raspuns.json().catch(() => ({}));
+        console.error(date);
+      }
+    } catch (err) {
+      console.error(err);
+    }
 
     setSeSterge(null);
 
-    if (error) {
-      console.error(error);
+    if (!ok) {
       alert("Nu s-a putut șterge abonamentul. Încearcă din nou.");
       return;
     }
@@ -133,6 +145,16 @@ export default function ListaAbonamente({
     <div className="space-y-3">
       {abonamente.map((abonament) => {
         const testare = testStatus[abonament.id];
+        if (editeazaId === abonament.id) {
+          return (
+            <EditeazaAbonament
+              key={abonament.id}
+              abonament={abonament}
+              userId={userId}
+              onInchide={() => setEditeazaId(null)}
+            />
+          );
+        }
         return (
           <div
             key={abonament.id}
@@ -173,7 +195,14 @@ export default function ListaAbonamente({
                 </p>
               )}
             </div>
-            <div className="flex gap-2 self-start shrink-0">
+            <div className="flex flex-wrap gap-2 self-start shrink-0">
+              <button
+                onClick={() => setEditeazaId(abonament.id)}
+                disabled={!!seSterge || !!seTrimiteTest}
+                className="bg-slate-100 text-slate-700 font-semibold px-4 py-2 rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50 whitespace-nowrap"
+              >
+                Modifică
+              </button>
               <button
                 onClick={() => handleTrimiteTest(abonament.id)}
                 disabled={seTrimiteTest === abonament.id || !!seSterge}

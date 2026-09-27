@@ -38,6 +38,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // Sincronizare cu „Alertele mele": abonamentele Telegram ale utilizatorului
+    // urmează starea utilizatorului. Dezactivat → toate abonamentele Telegram
+    // devin inactive (dispar din lista utilizatorului); reactivat → reapar.
+    const { error: eroareAbonamente } = await supabase
+      .from('abonamente')
+      .update({ activ })
+      .eq('tip_contact', 'telegram')
+      .eq('valoare_contact', `@${username}`);
+
+    if (eroareAbonamente) {
+      console.error('Telegram toggle abonamente error:', eroareAbonamente.message);
+      return NextResponse.json({ error: eroareAbonamente.message }, { status: 500 });
+    }
+
     return NextResponse.json({ ok: true, user: data });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
