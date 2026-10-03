@@ -48,8 +48,15 @@ async function handleTrigger(request: Request) {
 
   if (!githubResponse.ok) {
     const textEroare = await githubResponse.text();
+    // 401 = token invalid/expirat/revocat. Mesajul generic nu spune nimic despre
+    // cauză, iar adminul pierde timp căutând în cod. Aici cauza e aproape sigur
+    // GH_TOKEN din Vercel: trebuie generat un token nou (scope "workflow") și
+    // actualizat în Vercel, apoi redeploy.
+    const mesaj = githubResponse.status === 401
+      ? "GH_TOKEN din Vercel e invalid sau expirat — generează un token GitHub nou (scope workflow) și actualizează variabila în Vercel"
+      : "GitHub a refuzat declansarea workflow-ului";
     return NextResponse.json(
-      { error: "GitHub a refuzat declansarea workflow-ului", status: githubResponse.status, detaliu: textEroare },
+      { error: mesaj, status: githubResponse.status, detaliu: textEroare },
       { status: 502 }
     );
   }

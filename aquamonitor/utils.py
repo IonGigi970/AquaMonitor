@@ -34,8 +34,15 @@ def normalizeaza_text(text):
 
 def zona_avariei(avarie):
     """Zona afectată, așa cum o citim în notificări: strada, altfel cartierul,
+    altfel zona din anunț (deconectările programate țin zona doar în detalii),
     altfel toată localitatea (o avarie fără zonă concretă acoperă localitatea)."""
-    return avarie.get("strada") or avarie.get("cartier") or TOATA_LOCALITATEA
+    zona = avarie.get("strada") or avarie.get("cartier")
+    if zona:
+        return zona
+    detalii = (avarie.get("detalii_anunt") or "").strip()
+    if detalii:
+        return detalii[:80]
+    return TOATA_LOCALITATEA
 
 
 def acum_bucuresti():

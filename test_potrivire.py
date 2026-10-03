@@ -1,4 +1,5 @@
-"""Teste pentru se_potriveste_abonamentul: logica AND pe strada+cartier.
+"""Teste pentru se_potriveste_abonamentul: AND pe strada+cartier DOAR cand avaria
+specifica ambele campuri; altfel se potriveste pe campul precizat.
 
 Ruleaza cu: python test_potrivire.py
 Iesire: [OK]/[FAIL] per caz, exit 0 daca toate trec, 1 altfel.
@@ -22,18 +23,27 @@ CAZURI = [
      "revolutiei din 22 decembrie 1989", "piata ovidiu", "tomis", "", "", False),
     # Costin: doar cartier tomis 3, avarie pe strada Tomis
     ("real: cartier tomis 3 vs Tomis", "", "tomis 3", "tomis", "", "", True),
-    # Alin: strada tomis + cartier palazu mare, avarie pe strada Tomis (fara cartier)
-    ("real: tomis+palazu mare vs Tomis", "tomis", "palazu mare", "tomis", "", "", False),
+    # Alin: strada tomis + cartier palazu mare, avarie pe strada Tomis (fara cartier).
+    # Avaria specifica doar strada, iar strada abonatului se potriveste → PRIMESTE alerta.
+    ("real: tomis+palazu mare vs Tomis", "tomis", "palazu mare", "tomis", "", "", True),
     # Abonament pe toata localitatea (fara strada/cartier)
     ("real: toata localitatea", "", "", "tomis", "", "", True),
 
-    # --- Logica AND: ambele campuri trebuie sa se potriveasca ---
+    # --- Logica AND: DOAR cand avaria specifica ambele campuri ---
     ("AND: ambele in structuri", "tomis", "palazu mare", "tomis", "palazu mare", "", True),
-    ("AND: doar strada", "tomis", "palazu mare", "tomis", "", "", False),
-    ("AND: doar cartier", "tomis", "palazu mare", "", "palazu mare", "", False),
+    ("AND: avaria doar cu strada, strada abonatului se potriveste",
+     "tomis", "palazu mare", "tomis", "", "", True),
+    ("AND: avaria doar cu cartier, cartierul abonatului se potriveste",
+     "tomis", "palazu mare", "", "palazu mare", "", True),
     ("AND: niciunul", "tomis", "palazu mare", "bucuresti", "far", "", False),
-    ("AND: cartier in strada avariei (incrucisat)", "tomis", "palazu mare", "palazu mare", "", "", False),
-    ("AND: strada in cartierul avariei (incrucisat)", "tomis", "palazu mare", "", "tomis", "", False),
+    ("AND: avaria cu ambele, doar strada se potriveste",
+     "tomis", "palazu mare", "tomis", "far", "", False),
+    ("AND: avaria cu ambele, doar cartierul se potriveste",
+     "tomis", "palazu mare", "bucuresti", "palazu mare", "", False),
+    ("AND: cartier in strada avariei (incrucisat)",
+     "tomis", "palazu mare", "palazu mare", "", "", True),
+    ("AND: strada in cartierul avariei (incrucisat)",
+     "tomis", "palazu mare", "", "tomis", "", True),
 
     # --- Logica OR: un singur camp completat ---
     ("OR: doar cartier, potrivit", "", "palazu mare", "tomis", "palazu mare", "", True),
@@ -45,10 +55,11 @@ CAZURI = [
     ("substring: abonat lung, anunt scurt", "revolutiei din 22 decembrie 1989", "", "revolutiei", "", "", True),
     ("substring: abonat scurt, anunt lung", "revolutiei", "", "revolutiei din 22 decembrie 1989", "", "", True),
 
-    # --- text_zona (deconectari programate) ---
-    ("text_zona AND: ambele in text", "tomis", "palazu mare", "", "", "zona tomis si palazu mare", True),
-    ("text_zona AND: doar strada in text", "tomis", "palazu mare", "", "", "zona tomis", False),
-    ("text_zona AND: doar cartier in text", "tomis", "palazu mare", "", "", "zona palazu mare", False),
+    # --- text_zona (deconectari programate): orice termen gasit in text se potriveste ---
+    ("text_zona: ambele in text", "tomis", "palazu mare", "", "", "zona tomis si palazu mare", True),
+    ("text_zona: doar strada in text", "tomis", "palazu mare", "", "", "zona tomis", True),
+    ("text_zona: doar cartier in text", "tomis", "palazu mare", "", "", "zona palazu mare", True),
+    ("text_zona: niciunul in text", "tomis", "palazu mare", "", "", "zona bucuresti", False),
     ("text_zona OR: un singur camp, potrivit", "tomis", "", "", "", "zona tomis nr 281", True),
     ("text_zona OR: un singur camp, nepotrivit", "tomis", "", "", "", "zona bucuresti", False),
     ("text_zona: granita de cuvant", "tomis", "", "", "", "b-dul tomis nr 281", True),

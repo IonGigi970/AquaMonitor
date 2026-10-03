@@ -150,26 +150,25 @@ def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, 
     Reguli:
     - Dacă abonatul nu are nici stradă, nici cartier → se potrivește cu orice avarie
       din localitatea lui (abonament pe toată localitatea).
-    - Dacă abonatul are DOAR cartier → se potrivește când cartierul apare în avarie
-      (comportamentul clasic, păstrat).
+    - Dacă abonatul are DOAR cartier → se potrivește când cartierul apare în avarie.
     - Dacă abonatul are DOAR stradă → se potrivește când strada apare în avarie.
-    - Dacă abonatul are ȘI stradă ȘI cartier → AMBELE trebuie să se potrivească
-      (logică AND): avaria trebuie să fie în cartierul respectiv ȘI strada respectivă
-      să fie afectată. Un abonament pe „strada X, cartierul Y" nu primește alerte
-      pentru orice avarie de pe strada X, ci doar pentru cele din cartierul Y.
+    - Dacă abonatul are ȘI stradă ȘI cartier → logica AND se aplică DOAR când avaria
+      specifică și ea ambele câmpuri: atunci ambele trebuie să se potrivească.
+      Când avaria specifică doar unul (ex: strada, fără cartier), se potrivește pe
+      acela — altfel abonatul pe „strada X, cartier Y" ar rata exact alertele
+      pentru strada lui, pentru că RAJA nu precizează întotdeauna cartierul.
     - Potrivire bidirecțională pe subșir: acoperă nume scrise parțial de RAJA
       (ex: abonat pe „Revoluției din 22 Decembrie 1989", anunț cu „Revoluției").
     - Câmpurile se verifică încrucișat (cartierul abonatului în strada avariei și
       invers), ca să acopere abonamente vechi salvate în câmpul greșit.
     - Pentru deconectările programate zona reală stă în textul anunțului (detalii),
       nu în câmpuri structurate: dacă text_zona e dat, termenii abonatului se caută
-      și acolo, la graniță de cuvânt, cu aceeași logică (AND când ambele câmpuri
-      sunt completate, individual când e doar unul)."""
+      și acolo, la graniță de cuvânt (oricare dintre ei — anunțul poate menționa
+      doar strada sau doar cartierul)."""
     if not (cartier_abonament or strada_abonament):
         return True
 
     termeni = [t for t in (cartier_abonament, strada_abonament) if t]
-    mod_and = len(termeni) == 2
 
     def _in_structuri(termen):
         return (
@@ -182,17 +181,20 @@ def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, 
     def _in_text(termen):
         return bool(re.search(r"(?<![a-z0-9])" + re.escape(termen) + r"(?![a-z0-9])", text_zona))
 
-    potriviri_structurate = [_in_structuri(t) for t in termeni]
-    if mod_and and all(potriviri_structurate):
-        return True
-    if not mod_and and any(potriviri_structurate):
-        return True
+    # Avaria specifică ambele câmpuri (stradă + cartier) → AND: ambele trebuie să
+    # se potrivească. Avaria specifică doar unul → se potrivește pe acela (OR pe
+    # termenii abonatului): un abonat pe „strada X, cartier Y" trebuie anunțat și
+    # când avaria e pe strada X fără cartier precizat, altfel ratează alertele
+    # pentru strada lui.
+    if strada_norm and cartier_norm:
+        if all(_in_structuri(t) for t in termeni):
+            return True
+    else:
+        if any(_in_structuri(t) for t in termeni):
+            return True
 
     if text_zona:
-        potriviri_text = [_in_text(t) for t in termeni]
-        if mod_and:
-            return all(potriviri_text)
-        return any(potriviri_text)
+        return any(_in_text(t) for t in termeni)
     return False
 
 
@@ -374,6 +376,16 @@ def reincearca_notificari_esuate():
             .select(COLOANE_AVARIE)
             .eq("serviciu", SERVICIU_APA)
             .gte("data", de_la_str)
+        ))
+        # Avarii apă fără dată (data NULL) adăugate în ultimele două zile: filtrul
+        # de mai sus le sare, iar curățarea le șterge după 2 zile — fără această
+        # interogare, o notificare eșuată pentru ele s-ar pierde definitiv.
+        avarii_de_reluat.extend(citeste_toate(
+            lambda: supabase.table("avarii")
+            .select(COLOANE_AVARIE)
+            .eq("serviciu", SERVICIU_APA)
+            .is_("data", "null")
+            .gte("data_adaugarii", de_la_str)
         ))
         # Întreruperi de curent încă active (indiferent de ziua începerii).
         # Citire paginată: pot depăși 1000 de rânduri, iar un răspuns trunchiat ar
