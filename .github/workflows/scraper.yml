@@ -14,7 +14,10 @@ on:
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest
+    # Fixat explicit (nu ubuntu-latest), pentru ca ubuntu-latest migreaza la
+    # Ubuntu 26 incepand cu 19 octombrie 2026 si poate strica scraper-ul
+    # fara avertisment. Vezi https://github.com/actions/runner-images/issues/14748
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout cod
         uses: actions/checkout@v5
