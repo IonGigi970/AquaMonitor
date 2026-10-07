@@ -66,6 +66,13 @@ CAZURI = [
     ("text_zona: fara granita de cuvant (tomisul nu prinde)", "tomis", "", "", "", "zona tomisul", False),
     ("text_zona: structuri nepotrivite, text potrivit",
      "tomis", "palazu mare", "", "", "zona palazu mare si tomis", True),
+
+    # --- Graniță de cuvânt pe câmpuri structurate (nu doar text_zona) ---
+    ("structuri: 'mai' nu prinde 'mamaia'", "", "mai", "", "mamaia", "", False),
+    ("structuri: 'tomis' nu prinde 'tomisul'", "tomis", "", "tomisul", "", "", False),
+    ("structuri: 'far' nu prinde 'farului'", "far", "", "farului", "", "", False),
+    ("structuri: 'palazu' nu prinde fragmentul din 'palazu mare' fara granita gresita",
+     "", "palazu", "", "palazu mare", "", True),
 ]
 
 

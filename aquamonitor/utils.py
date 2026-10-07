@@ -1,5 +1,6 @@
 """Funcții utilitare generale: normalizare de text, zona unei avarii, data României."""
 
+import re
 import unicodedata
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -63,3 +64,17 @@ def contine_substring(a, b):
     """True dacă a e subșir al lui b, dar niciunul gol ("" in "x" e True în Python,
     ceea ce ar potrivi orice avarie cu orice abonat când un câmp e gol)."""
     return bool(a) and bool(b) and a in b
+
+
+def contine_fraza(a, b):
+    """True dacă a apare în b ca secvență completă de cuvinte (la graniță de
+    cuvânt), nu doar ca fragment în interiorul altui cuvânt.
+
+    Fără graniță de cuvânt, "mai" (ex: strada "1 Mai") s-ar potrivi cu
+    "Mamaia" (conține literele m-a-i consecutiv), iar "tomis" s-ar potrivi cu
+    "Tomisul" sau "far" cu "Farului" — street/cartier diferite, abonatul
+    primind alerte greșite. Folosește graniță pe literă/cifră, ca și potrivirea
+    din text_zona, dar acceptă fraze cu spații (ex: "tomis 3", "palazu mare")."""
+    if not a or not b:
+        return False
+    return bool(re.search(r"(?<![a-z0-9])" + re.escape(a) + r"(?![a-z0-9])", b))
