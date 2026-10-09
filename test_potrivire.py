@@ -73,6 +73,14 @@ CAZURI = [
     ("structuri: 'far' nu prinde 'farului'", "far", "", "farului", "", "", False),
     ("structuri: 'palazu' nu prinde fragmentul din 'palazu mare' fara granita gresita",
      "", "palazu", "", "palazu mare", "", True),
+
+    # --- Zone distincte (cartier diferit, desi incepe cu acelasi cuvant) ---
+    ("zone distincte: Alin (tomis+palazu mare) nu se potriveste cu cartierul Tomis Nord",
+     "tomis", "palazu mare", "", "ct tomis nord", "", False),
+    ("zone distincte: nu afecteaza cazul Costin (cartier tomis 3 vs strada tomis)",
+     "", "tomis 3", "tomis", "", "", True),
+    ("zone distincte: abonat chiar pe Tomis Nord tot se potriveste",
+     "", "tomis nord", "", "ct tomis nord", "", True),
 ]
 
 

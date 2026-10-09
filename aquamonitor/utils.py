@@ -66,6 +66,16 @@ def contine_substring(a, b):
     return bool(a) and bool(b) and a in b
 
 
+ZONE_DISTINCTE = frozenset({
+    # Cartiere/zone care încep cu un cuvânt folosit și ca nume de stradă generică
+    # în altă parte a orașului, dar denumesc o zonă diferită, nu o scriere mai
+    # lungă a aceleiași străzi (ex: cartierul "Tomis Nord" nu are legătură cu
+    # strada "Tomis" din Palazu Mare). Se normalizează la fel ca restul textelor.
+    "ct tomis nord",
+    "tomis nord",
+})
+
+
 def contine_fraza(a, b):
     """True dacă a apare în b ca secvență completă de cuvinte (la graniță de
     cuvânt), nu doar ca fragment în interiorul altui cuvânt.
