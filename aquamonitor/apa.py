@@ -146,7 +146,21 @@ def preia_articole_avarii():
     url = "https://rajac.ro/avarii/"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
 
-    raspuns = requests.get(url, headers=headers, timeout=30)
+    # Site-ul RAJA are uneori timpi mari de răspuns/erori tranzitorii. Reîncercăm
+    # de câteva ori înainte să renunțăm — scraper-ul oricum rulează la 15 minute,
+    # dar un retry imediat evită să pierdem complet un ciclu din cauza unui singur
+    # request lent.
+    raspuns = None
+    for incercare in range(1, 4):
+        try:
+            raspuns = requests.get(url, headers=headers, timeout=30)
+            break
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️ Încercarea {incercare}/3 de conectare la RAJA a eșuat: {e}")
+            if incercare == 3:
+                print("❌ Nu m-am putut conecta la RAJA după 3 încercări. Reiau la rularea următoare.")
+                return []
+
     if raspuns.status_code != 200:
         print(f"❌ Eroare HTTP: {raspuns.status_code}")
         return []
