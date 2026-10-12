@@ -150,6 +150,59 @@ def sterge_notificari_pentru_avarie(avarie_id):
     _comunicate_notificate = None
 
 
+def clasifica_potrivirea(strada_abonament, cartier_abonament, strada_norm, cartier_norm, text_zona="", strict_and=False):
+    """Eticheta tipului de potrivire pentru raportul adminului: cum s-a ajuns la
+    trimiterea acestei alerte. Folosită doar la alertele LIVRATE, ca adminul să
+    poată identifica potrivirile slabe (parțiale / doar pe text) și să le revizuiască.
+
+    - "toata localitatea": abonatul n-are stradă/cartier, primește tot din localitate
+    - "exacta": ambele câmpuri ale abonatului s-au potrivit (sau singurul lui câmp)
+    - "partiala": abonatul are 2 câmpuri, dar avaria a specificat unul singur (OR)
+    - "text": potrivire doar pe textul anunțului (tipic la deconectări programate)
+    - "strict": abonament cu strict_and, deci verificare exactă pe ambele câmpuri
+    """
+    if not (cartier_abonament or strada_abonament):
+        return "toata localitatea"
+
+    termeni = [t for t in (cartier_abonament, strada_abonament) if t]
+
+    def _in_structuri(termen):
+        return (
+            texte_se_potrivesc(termen, cartier_norm)
+            or texte_se_potrivesc(cartier_norm, termen)
+            or texte_se_potrivesc(termen, strada_norm)
+            or texte_se_potrivesc(strada_norm, termen)
+        )
+
+    def _in_text(termen):
+        return bool(text_zona) and texte_se_potrivesc(termen, text_zona)
+
+    if strict_and and len(termeni) == 2:
+        if all(_in_structuri(t) or _in_text(t) for t in termeni):
+            return "strict"
+        return "—"
+
+    in_structuri = [_in_structuri(t) for t in termeni]
+    in_text = [_in_text(t) for t in termeni]
+
+    if len(termeni) == 1:
+        if any(in_structuri):
+            return "exacta"
+        if any(in_text):
+            return "text"
+        return "—"
+    # doi termeni: exact = amândoi, parțial = unul singur
+    adevarate_structuri = sum(in_structuri)
+    adevarate_text = sum(in_text)
+    if adevarate_structuri == 2:
+        return "exacta"
+    if adevarate_structuri == 1 or adevarate_text == 2:
+        return "partiala"
+    if adevarate_text >= 1:
+        return "text"
+    return "—"
+
+
 def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, cartier_norm, text_zona="", strict_and=False):
     """Returnează True dacă un abonament (stradă/cartier de interes) se potrivește
     cu o avarie (stradă/cartier normalizate).
@@ -342,7 +395,15 @@ def notifica_abonatii(avarie_salvata):
         # iar la finalul rulării pleacă un singur email-rezumat.
         canal = {CANAL_EMAIL: "Email", CANAL_TELEGRAM: "Telegram"}.get(tip, str(tip))
         zona = zona_avariei(avarie_salvata)
-        strada_abonament = abonament.get("strada_interes") or ""
+        strada_afisata = abonament.get("strada_interes") or ""
+        potrivire = clasifica_potrivirea(
+            strada_abonament,  # deja normalizat la începutul buclei
+            cartier_abonament,
+            strada_norm,
+            cartier_norm,
+            text_zona,
+            strict_and,
+        )
         _jurnal_notificari.append({
             "serviciu": serviciu,
             "localitate": avarie_salvata.get("localitate"),
@@ -352,7 +413,8 @@ def notifica_abonatii(avarie_salvata):
             "contact": contact,
             "canal": canal,
             "zona_abonata": abonament.get("localitate_interes"),
-            "strada_abonata": strada_abonament,
+            "strada_abonata": strada_afisata,
+            "potrivire": potrivire,
         })
 
 
@@ -375,15 +437,30 @@ def trimite_rezumat_rulare():
         f"<td>{n['contact']}</td>"
         f"<td>{n['canal']}</td>"
         f"<td>{n['zona_abonata']}{' - ' + n['strada_abonata'] if n['strada_abonata'] else ''}</td>"
+        f"<td>{n['potrivire']}</td>"
         "</tr>"
         for n in _jurnal_notificari
     )
+
+    # Avertizăm adminul la potrivirile slabe (parțiale / doar pe text / pe toată
+    # localitatea): sunt trimise intenționat, dar merită revizia periodică a
+    # exactității — mai ales când un abonat primește pe un singur câmp.
+    slabe = [n for n in _jurnal_notificari if n["potrivire"] in ("partiala", "text")]
+    avertisment = ""
+    if slabe:
+        avertisment = (
+            "<p style='color:#b45309;'><b>⚠️ Potriviri slabe în această rulare:</b> "
+            f"{len(slabe)} alerte trimise pe o potrivire parțială sau doar pe textul "
+            "anunțului. Revizuiește-le în tabelul de mai jos (coloana Potrivire).</p>"
+        )
+
     trimite_log_admin(
         f"📨 {len(_jurnal_notificari)} notificări trimise în această rulare",
         "<p><b>Notificări livrate abonaților în această rulare:</b></p>"
+        f"{avertisment}"
         "<table border='1' cellpadding='4' cellspacing='0'>"
         "<tr><th>Serviciu</th><th>Zonă avarie</th><th>Status</th><th>Data</th><th>Către</th>"
-        "<th>Canal</th><th>Zonă abonată</th></tr>"
+        "<th>Canal</th><th>Zonă abonată</th><th>Potrivire</th></tr>"
         f"{randuri}</table>",
     )
     print(f"📨 Rezumat trimis adminului: {len(_jurnal_notificari)} notificări livrate.")
