@@ -72,9 +72,20 @@ def _incarca_abonamente():
     """Toate abonamentele active, citite o singura data per proces."""
     global _abonamente_active
     if _abonamente_active is None:
-        _abonamente_active = citeste_toate(
-            lambda: supabase.table("abonamente").select(COLOANE_ABONAMENT).eq("activ", True)
-        )
+        try:
+            _abonamente_active = citeste_toate(
+                lambda: supabase.table("abonamente").select(COLOANE_ABONAMENT).eq("activ", True)
+            )
+        except Exception:
+            # Perioada de tranziție înainte de migrarea 014 (coloana strict_and):
+            # reîncercăm fără coloană, ca scraperul să nu cadă dacă push-ul a
+            # ajuns înaintea migrării din Supabase. strict_and revine automat
+            # la False (comportamentul vechi) până se aplică migrarea.
+            _abonamente_active = citeste_toate(
+                lambda: supabase.table("abonamente")
+                .select(COLOANE_ABONAMENT.replace(",strict_and", ""))
+                .eq("activ", True)
+            )
     return _abonamente_active
 
 
