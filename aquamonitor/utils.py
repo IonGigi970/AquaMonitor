@@ -88,3 +88,43 @@ def contine_fraza(a, b):
     if not a or not b:
         return False
     return bool(re.search(r"(?<![a-z0-9])" + re.escape(a) + r"(?![a-z0-9])", b))
+
+
+def numere_se_potrivesc(termen, target):
+    """Dacă AMBELE texte au numere (de casă/bloc), cel puțin unul trebuie să
+    coincidă — altfel abonatul pe "tomis 281" ar primi alerta pentru "tomis 285"
+    (o scară de bloc diferită).
+
+    Dacă doar unul are numere (ex: avaria scrie doar "bd. Tomis", fără număr),
+    nu blocăm potrivirea pe cuvinte — nu avem de unde ști numărul. La fel, dacă
+    niciunul nu are numere (ex: cartierul "Tomis 3" vs strada "Tomis"), numerele
+    nu sunt un factor de decizie."""
+    if not termen or not target:
+        return True
+    numere_termen = set(re.findall(r"\d+", termen))
+    numere_target = set(re.findall(r"\d+", target))
+    if not numere_termen or not numere_target:
+        return True
+    return not numere_termen.isdisjoint(numere_target)
+
+
+def texte_se_potrivesc(a, b):
+    """Potrivire pe cuvinte (graniță de frază) SAU pe numărul de casă/bloc.
+
+    Cuvintele acoperă "tomis 281" ↔ "tomis" și "tomis 281" ↔ "tomis 3". Regula pe
+    număr acoperă cazul în care avaria scrie numărul separat (ex: "bd. Tomis nr.
+    281"): dacă numerele coincid, fiecare cuvânt al termenului (fără cifre) trebuie
+    să apară în celălalt text — altfel "1 mai 281" n-ar potrivi cu "tomis 281"."""
+    if not a or not b:
+        return False
+    if contine_fraza(a, b) or contine_fraza(b, a):
+        return True
+
+    numere_a = set(re.findall(r"\d+", a))
+    numere_b = set(re.findall(r"\d+", b))
+    if not numere_a or not numere_b or numere_a.isdisjoint(numere_b):
+        return False
+
+    cuvinte_a = [c for c in a.split() if not re.fullmatch(r"\d+[a-z]*", c)]
+    cuvinte_b = [c for c in b.split() if not re.fullmatch(r"\d+[a-z]*", c)]
+    return all(contine_fraza(c, b) for c in cuvinte_a) or all(contine_fraza(c, a) for c in cuvinte_b)

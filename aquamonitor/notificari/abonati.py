@@ -13,7 +13,15 @@ from ..config import (
     supabase,
 )
 from ..db import citeste_toate
-from ..utils import ZONE_DISTINCTE, azi_bucuresti, contine_fraza, normalizeaza_text, zona_avariei
+from ..utils import (
+    ZONE_DISTINCTE,
+    azi_bucuresti,
+    contine_fraza,
+    normalizeaza_text,
+    numere_se_potrivesc,
+    texte_se_potrivesc,
+    zona_avariei,
+)
 from .context import escape_markdown
 from .email import trimite_email, trimite_email_html, trimite_log_admin
 from .telegram import trimite_telegram, trimite_telegram_text
@@ -180,19 +188,24 @@ def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, 
         # Potrivirea încrucișată pe un termen generic (ex: "tomis") nu trebuie să
         # prindă un cartier/stradă din ZONE_DISTINCTE (ex: "Tomis Nord") doar
         # pentru că împart primul cuvânt — sunt zone diferite, nu variante ale
-        # aceluiași nume. Excepția se aplică doar când abonatul nu a specificat
-        # el însuși acea zonă distinctă în câmpul corespunzător.
+        # aceluiași nume. Protecția blochează AMBELE direcții (termen→zonă și
+        # zonă→termen), ca regula de potrivire pe numere să n-o poată ocoli.
+        # Excepție: abonatul chiar pe acea zonă distinctă se potrivește normal.
         cartier_e_zona_distincta = cartier_norm in ZONE_DISTINCTE and termen != cartier_abonament
         strada_e_zona_distincta = strada_norm in ZONE_DISTINCTE and termen != strada_abonament
         return (
-            (not cartier_e_zona_distincta and contine_fraza(termen, cartier_norm))
-            or contine_fraza(cartier_norm, termen)
-            or (not strada_e_zona_distincta and contine_fraza(termen, strada_norm))
-            or contine_fraza(strada_norm, termen)
+            (not cartier_e_zona_distincta
+             and texte_se_potrivesc(termen, cartier_norm) and numere_se_potrivesc(termen, cartier_norm))
+            or (not cartier_e_zona_distincta
+                and texte_se_potrivesc(cartier_norm, termen) and numere_se_potrivesc(cartier_norm, termen))
+            or (not strada_e_zona_distincta
+                and texte_se_potrivesc(termen, strada_norm) and numere_se_potrivesc(termen, strada_norm))
+            or (not strada_e_zona_distincta
+                and texte_se_potrivesc(strada_norm, termen) and numere_se_potrivesc(strada_norm, termen))
         )
 
     def _in_text(termen):
-        return contine_fraza(termen, text_zona)
+        return texte_se_potrivesc(termen, text_zona) and numere_se_potrivesc(termen, text_zona)
 
     # Avaria specifică ambele câmpuri (stradă + cartier) → AND: ambele trebuie să
     # se potrivească. Avaria specifică doar unul → se potrivește pe acela (OR pe

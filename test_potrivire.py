@@ -106,6 +106,22 @@ CAZURI = [
      "tomis", "palazu mare", "", "", "zona bulevardul tomis si cartierul palazu mare", True, True),
     ("strict: programata curent, zona doar in text, doar unul in text -> nu se trimite",
      "tomis", "palazu mare", "", "", "zona bulevardul tomis", False, True),
+
+    # --- Potrivirea pe numere (de casa/bloc) ---
+    ("numere: abonat tomis 281, avarie tomis 285 -> NU (scara diferita)",
+     "tomis 281", "", "tomis 285", "", "", False),
+    ("numere: abonat tomis 281, avarie tomis (fara numar) -> da",
+     "tomis 281", "", "tomis", "", "", True),
+    ("numere: abonat tomis 281, avarie bd tomis nr 281 -> da",
+     "tomis 281", "", "bd tomis nr 281", "", "", True),
+    ("numere: cartier tomis 3 vs strada tomis (denumire fara nr) -> da",
+     "", "tomis 3", "tomis", "", "", True),
+    ("numere: abonat unirii 4a, avarie strada unirii -> da",
+     "unirii 4a", "", "unirii", "", "", True),
+    ("numere: abonat unirii 4a, avarie strada unirii 12 -> NU",
+     "unirii 4a", "", "unirii 12", "", "", False),
+    ("numere: abonat 1 mai 1a, avarie strada 1 mai -> da (acelasi numar 1)",
+     "1 mai 1a", "", "1 mai", "", "", True),
 ]
 
 
