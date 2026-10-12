@@ -50,6 +50,11 @@ export default function SiteFooter() {
               </Link>
             </li>
             <li>
+              <Link href="/noutati" className="hover:text-white transition-colors">
+                Noutăți & Actualizări
+              </Link>
+            </li>
+            <li>
               <Link href="/gdpr" className="hover:text-white transition-colors">
                 Confidențialitate & Termeni
               </Link>
