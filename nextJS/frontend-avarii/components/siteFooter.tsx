@@ -19,7 +19,7 @@ export default function SiteFooter() {
         <div className="flex flex-col items-center">
           <h3 className="font-bold text-lg mb-2">Contact & Sugestii</h3>
           <p className="text-sm text-blue-100">
-            Ai o sugestie sau o problemă? Scrie-ne la:
+            Ai o sugestie sau o problemă? Scrie-ne:
           </p>
           <a
             href="mailto:aquamonitorct@gmail.com"
@@ -27,6 +27,13 @@ export default function SiteFooter() {
           >
             aquamonitorct@gmail.com
           </a>
+          <span className="text-sm text-blue-100 block mt-1">sau</span>
+          <Link
+            href="/contact"
+            className="inline-block mt-1 bg-amber-300 text-blue-800 text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-amber-200 transition-colors"
+          >
+            Formular de contact
+          </Link>
         </div>
 
         <div className="flex flex-col items-center">

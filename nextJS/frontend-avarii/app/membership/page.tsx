@@ -6,6 +6,7 @@ import ListaAbonamente from "./listaAbonamente";
 import AdminTelegram from "./adminTelegram";
 import AdminStats from "./adminStats";
 import AdminZoneDistincte from "./adminZoneDistincte";
+import AdminMesajeContact from "./adminMesajeContact";
 
 export default async function MembershipPage() {
   const supabase = await createClient();
@@ -74,6 +75,13 @@ export default async function MembershipPage() {
                 Precizia potrivirii
               </h2>
               <AdminZoneDistincte />
+            </div>
+
+            <div className="mt-8">
+              <h2 className="text-lg font-bold text-slate-800 mb-4">
+                Mesaje de contact
+              </h2>
+              <AdminMesajeContact />
             </div>
           </>
         )}
