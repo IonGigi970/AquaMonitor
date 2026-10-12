@@ -14,6 +14,7 @@ interface Abonament {
   localitate_interes: string;
   strada_interes?: string | null;
   cartier_interes?: string | null;
+  strict_and?: boolean | null;
 }
 
 const ETICHETE_CANAL: Record<string, string> = {
@@ -43,6 +44,7 @@ export default function EditeazaAbonament({
     localitate_interes: abonament.localitate_interes ?? "",
     strada_interes: abonament.strada_interes ?? "",
     cartier_interes: abonament.cartier_interes ?? "",
+    strict_and: abonament.strict_and ?? false,
   });
   const [seSalveaza, setSeSalveaza] = useState(false);
   const [mesaj, setMesaj] = useState<{ text: string; tip: "success" | "error" } | null>(null);
@@ -66,6 +68,7 @@ export default function EditeazaAbonament({
       localitate_interes: normalizeazaText(form.localitate_interes),
       strada_interes: normalizeazaText(form.strada_interes),
       cartier_interes: normalizeazaText(form.cartier_interes),
+      strict_and: form.strict_and,
     };
 
     // Verificare duplicat (excluzând abonamentul curent): aceeași zonă + canal + contact.
@@ -217,6 +220,22 @@ export default function EditeazaAbonament({
             />
           </div>
         </div>
+
+        {form.strada_interes.trim() && form.cartier_interes.trim() && (
+          <label className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.strict_and}
+              onChange={(e) => setForm({ ...form, strict_and: e.target.checked })}
+              className="mt-0.5 w-4 h-4 accent-amber-600"
+            />
+            <span className="text-xs text-amber-900">
+              <b>Doar potriviri exacte</b> — alerte doar când avaria se referă clar{" "}
+              <b>și la strada, și la cartierul</b> de mai sus. O avarie care menționează doar una
+              dintre ele nu mă interesează.
+            </span>
+          </label>
+        )}
 
         <div className="flex gap-2">
           <button

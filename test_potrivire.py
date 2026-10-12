@@ -81,18 +81,46 @@ CAZURI = [
      "", "tomis 3", "tomis", "", "", True),
     ("zone distincte: abonat chiar pe Tomis Nord tot se potriveste",
      "", "tomis nord", "", "ct tomis nord", "", True),
+
+    # --- strict_and: doar potriviri exacte pe ambele campuri ---
+    # Formatul aici are 8 campuri: (nume, strad_ab, cartier_ab, strad_av, cartier_av, text, asteptat, strict)
+    ("strict: ambele campuri in avarie completa (potrivire) trece",
+     "tomis", "palazu mare", "tomis", "palazu mare", "", True, True),
+    ("strict: avarie doar cu strada NU se mai trimite (cartierul nu poate fi verificat)",
+     "tomis", "palazu mare", "tomis", "", "", False, True),
+    ("strict: avarie doar cu cartier NU se mai trimite (strada nu poate fi verificata)",
+     "tomis", "palazu mare", "", "palazu mare", "", False, True),
+    ("strict: avarie cu ambele dar doar unul se potriveste -> nu se trimite",
+     "tomis", "palazu mare", "tomis", "gara", "", False, True),
+    ("strict: avarie cu ambele, ambele potrivite -> se trimite",
+     "tomis", "palazu mare", "tomis", "palazu mare", "zona tomis palazu mare", True, True),
+    ("strict: avarie cu ambele, niciunul potrivit -> nu se trimite",
+     "tomis", "palazu mare", "1 mai", "gara", "", False, True),
+    ("strict: avarie cu ambele potrivite incrucisat -> se trimite",
+     "tomis", "palazu mare", "palazu mare", "tomis", "", True, True),
+    ("strict: un singur camp completat nu e afectat (strada se potriveste)",
+     "tomis", "", "tomis", "", "", True, True),
+    ("strict: un singur camp completat nu e afectat (nu se potriveste)",
+     "tomis", "", "1 mai", "", "", False, True),
+    ("strict: programata curent, zona doar in text, ambele in text -> se trimite",
+     "tomis", "palazu mare", "", "", "zona bulevardul tomis si cartierul palazu mare", True, True),
+    ("strict: programata curent, zona doar in text, doar unul in text -> nu se trimite",
+     "tomis", "palazu mare", "", "", "zona bulevardul tomis", False, True),
 ]
 
 
 def main():
     esecuri = 0
-    for nume, strada_ab, cartier_ab, strada_av, cartier_av, text_zona, asteptat in CAZURI:
+    for caz in CAZURI:
+        nume, strada_ab, cartier_ab, strada_av, cartier_av, text_zona, asteptat = caz[:7]
+        strict = caz[7] if len(caz) > 7 else False
         rezultat = se_potriveste_abonamentul(
             normalizeaza_text(strada_ab),
             normalizeaza_text(cartier_ab),
             normalizeaza_text(strada_av),
             normalizeaza_text(cartier_av),
             normalizeaza_text(text_zona),
+            strict,
         )
         if rezultat == asteptat:
             print(f"[OK]   {nume}")

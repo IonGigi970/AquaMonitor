@@ -14,6 +14,7 @@ interface Abonament {
   localitate_interes: string;
   strada_interes?: string | null;
   cartier_interes?: string | null;
+  strict_and?: boolean | null;
 }
 
 const ETICHETE_CANAL: Record<string, string> = {
@@ -166,6 +167,11 @@ export default function ListaAbonamente({
               {abonament.judet && (
                 <span className="inline-block text-xs font-bold px-3 py-1 rounded-full bg-violet-100 text-violet-700">
                   {formateazaText(abonament.judet)}
+                </span>
+              )}
+              {abonament.strict_and && (
+                <span className="inline-block text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700">
+                  Exact (stradă + cartier)
                 </span>
               )}
               <span className="inline-block text-xs font-bold px-3 py-1 rounded-full bg-blue-100 text-blue-700">

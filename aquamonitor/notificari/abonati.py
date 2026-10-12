@@ -22,7 +22,7 @@ from .telegram import trimite_telegram, trimite_telegram_text
 # coloanele nefolosite, de mai multe ori pe rulare.
 COLOANE_ABONAMENT = (
     "id,activ,serviciu,judet,tip_contact,valoare_contact,"
-    "localitate_interes,strada_interes,cartier_interes,created_at"
+    "localitate_interes,strada_interes,cartier_interes,strict_and,created_at"
 )
 
 # Coloanele de care avem nevoie cand reluam notificarile pentru o avarie.
@@ -142,7 +142,7 @@ def sterge_notificari_pentru_avarie(avarie_id):
     _comunicate_notificate = None
 
 
-def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, cartier_norm, text_zona=""):
+def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, cartier_norm, text_zona="", strict_and=False):
     """Returnează True dacă un abonament (stradă/cartier de interes) se potrivește
     cu o avarie (stradă/cartier normalizate).
 
@@ -156,6 +156,10 @@ def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, 
       Când avaria specifică doar unul (ex: strada, fără cartier), se potrivește pe
       acela — altfel abonatul pe „strada X, cartier Y" ar rata exact alertele
       pentru strada lui, pentru că RAJA nu precizează întotdeauna cartierul.
+    - strict_and=True (abonatul vrea doar potriviri exacte): când are ambele câmpuri
+      completate, AMBELE trebuie să se potrivească mereu (AND), indiferent de cât de
+      specifică e avaria. O avarie cu doar strada nu se mai trimite dacă și cartierul
+      nu se poate verifica exact.
     - Potrivire bidirecțională pe frază, la graniță de cuvânt: acoperă nume
       scrise parțial de RAJA (ex: abonat pe „Revoluției din 22 Decembrie 1989",
       anunț cu „Revoluției"), dar nu potrivește fragmente din interiorul altui
@@ -195,6 +199,15 @@ def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, 
     # termenii abonatului): un abonat pe „strada X, cartier Y" trebuie anunțat și
     # când avaria e pe strada X fără cartier precizat, altfel ratează alertele
     # pentru strada lui.
+    #
+    # strict_and → doar potriviri exacte: abonatul cu AMBELE câmpuri completate
+    # primește alerte doar când fiecare termen al lui apare în avarie (în structuri
+    # sau în text). O avarie incompletă (ex: doar strada) nu-l mai anunță, fiindcă
+    # nu se poate verifica exact al doilea câmp. Abonamentele cu un singur câmp nu
+    # sunt afectate de strict — au deja o singură condiție.
+    if strict_and and len(termeni) == 2:
+        return all(_in_structuri(t) or _in_text(t) for t in termeni)
+
     if strada_norm and cartier_norm:
         if all(_in_structuri(t) for t in termeni):
             return True
@@ -263,8 +276,9 @@ def notifica_abonatii(avarie_salvata):
 
         strada_abonament = normalizeaza_text(abonament.get("strada_interes") or "")
         cartier_abonament = normalizeaza_text(abonament.get("cartier_interes") or "")
+        strict_and = bool(abonament.get("strict_and"))
 
-        if not se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, cartier_norm, text_zona):
+        if not se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, cartier_norm, text_zona, strict_and):
             continue
 
         abonament_creat = abonament.get("created_at") or ""
