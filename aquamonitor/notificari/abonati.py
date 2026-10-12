@@ -14,9 +14,8 @@ from ..config import (
 )
 from ..db import citeste_toate
 from ..utils import (
-    ZONE_DISTINCTE,
     azi_bucuresti,
-    contine_fraza,
+    este_zona_distincta,
     normalizeaza_text,
     numere_se_potrivesc,
     texte_se_potrivesc,
@@ -244,8 +243,8 @@ def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, 
         # aceluiași nume. Protecția blochează AMBELE direcții (termen→zonă și
         # zonă→termen), ca regula de potrivire pe numere să n-o poată ocoli.
         # Excepție: abonatul chiar pe acea zonă distinctă se potrivește normal.
-        cartier_e_zona_distincta = cartier_norm in ZONE_DISTINCTE and termen != cartier_abonament
-        strada_e_zona_distincta = strada_norm in ZONE_DISTINCTE and termen != strada_abonament
+        cartier_e_zona_distincta = este_zona_distincta(cartier_norm) and termen != cartier_abonament
+        strada_e_zona_distincta = este_zona_distincta(strada_norm) and termen != strada_abonament
         return (
             (not cartier_e_zona_distincta
              and texte_se_potrivesc(termen, cartier_norm) and numere_se_potrivesc(termen, cartier_norm))

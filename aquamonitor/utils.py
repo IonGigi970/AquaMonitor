@@ -66,7 +66,7 @@ def contine_substring(a, b):
     return bool(a) and bool(b) and a in b
 
 
-ZONE_DISTINCTE = frozenset({
+ZONE_DISTINCTE_DEFAULT = frozenset({
     # Cartiere/zone care încep cu un cuvânt folosit și ca nume de stradă generică
     # în altă parte a orașului, dar denumesc o zonă diferită, nu o scriere mai
     # lungă a aceleiași străzi (ex: cartierul "Tomis Nord" nu are legătură cu
@@ -74,6 +74,35 @@ ZONE_DISTINCTE = frozenset({
     "ct tomis nord",
     "tomis nord",
 })
+
+_zone_distincte_cache = None
+
+
+def _incarca_zone_distincte():
+    """Încarcă lista de zone distincte din baza de date (tabela zone_distincte,
+    editabilă din UI de admin), cu fallback la ZONE_DISTINCTE_DEFAULT dacă tabela
+    nu există sau nu răspunde (ex: rulare offline, ca testele).
+
+    Cache pe durata procesului: o singură interogare pe rulare; o zonă adăugată
+    de admin din UI e preluată la rularea următoare a scraperului (15 min)."""
+    global _zone_distincte_cache
+    if _zone_distincte_cache is not None:
+        return _zone_distincte_cache
+
+    try:
+        from .config import supabase
+        raspuns = supabase.table("zone_distincte").select("text").execute()
+        randuri = raspuns.data or []
+        incarcate = {r["text"].strip() for r in randuri if r.get("text")}
+        _zone_distincte_cache = frozenset(incarcate) if incarcate else ZONE_DISTINCTE_DEFAULT
+    except Exception:
+        _zone_distincte_cache = ZONE_DISTINCTE_DEFAULT
+    return _zone_distincte_cache
+
+
+def este_zona_distincta(text):
+    """True dacă textul (normalizat) e o zonă distinctă din lista editabilă."""
+    return text in _incarca_zone_distincte()
 
 
 def contine_fraza(a, b):

@@ -5,6 +5,7 @@ import MembershipForm from "./membershipForm";
 import ListaAbonamente from "./listaAbonamente";
 import AdminTelegram from "./adminTelegram";
 import AdminStats from "./adminStats";
+import AdminZoneDistincte from "./adminZoneDistincte";
 
 export default async function MembershipPage() {
   const supabase = await createClient();
@@ -66,6 +67,13 @@ export default async function MembershipPage() {
                 Utilizatori Telegram cu /start
               </h2>
               <AdminTelegram />
+            </div>
+
+            <div className="mt-8">
+              <h2 className="text-lg font-bold text-slate-800 mb-4">
+                Precizia potrivirii
+              </h2>
+              <AdminZoneDistincte />
             </div>
           </>
         )}
