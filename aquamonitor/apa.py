@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 import requests
 from bs4 import BeautifulSoup
 
-from .ai_extract import extrage_avarii_din_text
+from .ai_extract import extrage_avarii_din_texte
 from .config import SERVICIU_APA, SERVICIU_CURENT, STATUS_REMEDIAT, supabase
 from .geocodare import obtine_coordonate
 from .notificari.abonati import notifica_abonatii
@@ -235,20 +235,28 @@ def sincronizeaza_apa():
     nu duplicam avariile si sa nu trimitem notificari repetate."""
     articole = preia_articole_avarii()
 
+    noi = []
     for articol in articole:
         if articol_deja_procesat(articol["url"]):
             print(f"⏭️  Deja procesat: {articol['url']}")
             continue
+        noi.append(articol)
 
-        print(f"🧠 Procesez articol nou: {articol['url']}")
-        avarii_extrase = extrage_avarii_din_text(articol["text"])
+    if not noi:
+        return
 
-        if avarii_extrase is None:
-            # Eroare AI (nu „articol fără avarii"): NU marcăm articolul ca
-            # procesat, ca să fie reluat la rularea următoare.
-            print("⏭️  Extragerea AI a eșuat — articolul se reia la rularea următoare.")
+    # Toate articolele noi într-un singur apel AI (economisește cota zilnică).
+    print(f"🧠 Procesez {len(noi)} articole noi cu AI (un singur apel per lot)...")
+    avarii_pe_url = extrage_avarii_din_texte(noi)
+
+    for articol in noi:
+        if articol["url"] not in avarii_pe_url:
+            # Fără răspuns AI valid: NU marcăm articolul ca procesat, ca să fie
+            # reluat la rularea următoare.
+            print(f"⏭️  Fără răspuns AI pentru {articol['url']} — se reia la rularea următoare.")
             continue
 
+        avarii_extrase = avarii_pe_url[articol["url"]]
         nr_salvate, nr_erori = 0, 0
         if avarii_extrase:
             nr_salvate, nr_erori = salveaza_avarii(
