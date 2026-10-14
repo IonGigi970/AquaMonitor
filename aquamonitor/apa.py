@@ -6,7 +6,12 @@ from zoneinfo import ZoneInfo
 import requests
 from bs4 import BeautifulSoup
 
-from .ai_extract import extrage_avarii_din_texte
+from .ai_extract import (
+    extrage_avarii_din_texte,
+    inregistreaza_eroare_ai,
+    inregistreaza_succes_ai,
+    pauza_ai_activa,
+)
 from .config import SERVICIU_APA, SERVICIU_CURENT, STATUS_REMEDIAT, supabase
 from .geocodare import obtine_coordonate
 from .notificari.abonati import notifica_abonatii
@@ -245,9 +250,26 @@ def sincronizeaza_apa():
     if not noi:
         return
 
+    # După un eșec AI, pauza e memorată în stare_scraper (migrarea 017): nu mai
+    # apelăm Gemini inutil la fiecare rulare de 15 minute cât timp e cotă epuizată
+    # sau modelul e suprasolicitat — articolele se reiau exact când expiră pauza.
+    pauza = pauza_ai_activa()
+    if pauza:
+        print(f"⏸️  Apeluri AI în pauză (încă {pauza // 60} min) — reiau la o rulare următoare.")
+        return
+
     # Toate articolele noi într-un singur apel AI (economisește cota zilnică).
     print(f"🧠 Procesez {len(noi)} articole noi cu AI (un singur apel per lot)...")
     avarii_pe_url = extrage_avarii_din_texte(noi)
+
+    if len(avarii_pe_url) < len(noi):
+        # Unul sau mai multe articole n-au primit răspuns: fie cotă epuizată, fie
+        # model indisponibil. Oprim încercările o vreme (timpul din eroare), ca să
+        # nu ardem cota gratuită în gol, apoi reluăm automat.
+        inregistreaza_eroare_ai()
+        print("⏸️  Eșec parțial AI — pornesc pauza de reîncercare.")
+    else:
+        inregistreaza_succes_ai()
 
     for articol in noi:
         if articol["url"] not in avarii_pe_url:
