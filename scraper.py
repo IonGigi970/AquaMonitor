@@ -6,7 +6,6 @@ O singura rulare face, in ordine:
   3. sincronizeaza intreruperile de energie electrica (accidentale + programate);
   4. reincearca notificarile care au esuat la rulari anterioare;
   5. trimite adminului un rezumat al livrarilor.
-
 Fiecare faza ruleaza izolat: daca una cade, restul continua (ex: cand API-ul de
 curent e picat, avariile de apa se preiau in continuare), iar la final adminul
 primeste pe email eroarea exacta, cu tot cu traceback.
@@ -34,6 +33,7 @@ from aquamonitor.notificari.abonati import (
     trimite_notificare_test,
     trimite_rezumat_rulare,
 )
+from aquamonitor.notificari.broadcast import ruleaza_broadcast
 from aquamonitor.notificari.email import trimite_alerta_eroare
 
 # Fazele unei rulari normale, in ordine. Rulate izolat (vezi ruleaza_scanare).
@@ -43,6 +43,7 @@ FAZE = (
     ("Sincronizare intreruperi curent (accidentale)", sincronizeaza_intreruperi_curent),
     ("Sincronizare intreruperi curent (programate)", sincronizeaza_intreruperi_programate),
     ("Reincercare notificari esuate", reincearca_notificari_esuate),
+    ("Anunt programat catre abonati", ruleaza_broadcast),
     ("Rezumat pentru admin", trimite_rezumat_rulare),
 )
 
