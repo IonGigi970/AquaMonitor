@@ -292,7 +292,13 @@ def se_potriveste_abonamentul(strada_abonament, cartier_abonament, strada_norm, 
             return True
 
     if text_zona:
-        return any(_in_text(t) for t in termeni)
+        # Când zona reală stă în text (deconectări de curent: strada/cartier sunt
+        # goale în avarie), un abonat cu AMBELE câmpuri completate se anunță doar
+        # dacă ambele se regăsesc în text (AND) — un anunț care zice doar
+        # „bd. I.C. Brătianu" nu trebuie să-l anunțe pe cineva abonat pe
+        # „bd. X + cartier Y" dacă nu menționează și cartierul. Pentru abonatul
+        # cu un singur câmp rămâne suficient acel câmp.
+        return all(_in_text(t) for t in termeni) if len(termeni) == 2 else any(_in_text(t) for t in termeni)
     return False
 
 

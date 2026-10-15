@@ -57,8 +57,8 @@ CAZURI = [
 
     # --- text_zona (deconectari programate): orice termen gasit in text se potriveste ---
     ("text_zona: ambele in text", "tomis", "palazu mare", "", "", "zona tomis si palazu mare", True),
-    ("text_zona: doar strada in text", "tomis", "palazu mare", "", "", "zona tomis", True),
-    ("text_zona: doar cartier in text", "tomis", "palazu mare", "", "", "zona palazu mare", True),
+    ("text_zona: doar strada in text -> ambele completate acum cer AND, deci NU", "tomis", "palazu mare", "", "", "zona tomis", False),
+    ("text_zona: doar cartier in text -> ambele completate cer AND, deci NU", "tomis", "palazu mare", "", "", "zona palazu mare", False),
     ("text_zona: niciunul in text", "tomis", "palazu mare", "", "", "zona bucuresti", False),
     ("text_zona OR: un singur camp, potrivit", "tomis", "", "", "", "zona tomis nr 281", True),
     ("text_zona OR: un singur camp, nepotrivit", "tomis", "", "", "", "zona bucuresti", False),
