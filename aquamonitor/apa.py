@@ -1,5 +1,6 @@
 """Avarii de apa: preluarea articolelor RAJA, extragerea si salvarea avariilor."""
 
+import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -15,10 +16,81 @@ from .ai_extract import (
 from .config import SERVICIU_APA, SERVICIU_CURENT, STATUS_REMEDIAT, supabase
 from .geocodare import obtine_coordonate
 from .notificari.abonati import notifica_abonatii
-from .utils import azi_bucuresti
+from .utils import azi_bucuresti, normalizeaza_text
 
 # Ca mesajul "ai rulat migrarea 012?" să apară o singură dată, nu la fiecare articol.
 _marcare_avertizata = False
+
+# Enumerarea cartierelor dintr-un anunț: „cartierele Casa de Cultură, Coiciu, Gară,
+# Abator, CET și Km 4". Se oprește la punct/virgulă, ca să nu înghită propoziția
+# următoare.
+_CARTIERE_IN_TEXT = re.compile(r"cartierele?\s+([^.;]+)", re.IGNORECASE)
+_SEPARATOR_CARTIER = re.compile(r"\s*(?:,|;|\bși\b|\bsi\b)\s*", re.IGNORECASE)
+
+# Un nume de cartier e scurt; peste limita asta e aproape sigur o bucată de frază.
+_LIMITA_NUME_CARTIER = 40
+
+
+def extrage_cartiere_din_text(text):
+    """Cartierele enumerate explicit în anunț, în ordinea din text.
+
+    Plasă de siguranță deterministă pentru anunțurile multi-zonă: AI-ul poate
+    colapsa un comunicat cu șase cartiere într-o singură avarie (s-a întâmplat pe
+    7 noiembrie 2026, când a reținut doar „Topolog" — locul conductei, nu zonele
+    afectate). Textul anunțului rămâne însă sursa de adevăr, iar enumerarea
+    „cartierele A, B și C" se poate citi fără AI."""
+    if not text:
+        return []
+    potrivire = _CARTIERE_IN_TEXT.search(text)
+    if not potrivire:
+        return []
+
+    cartiere = []
+    for bucata in _SEPARATOR_CARTIER.split(potrivire.group(1)):
+        nume = bucata.strip(" .-–—")
+        if not nume or len(nume) > _LIMITA_NUME_CARTIER:
+            continue
+        if nume.lower() in ("si", "și"):
+            continue
+        cartiere.append(nume)
+    return cartiere
+
+
+def completeaza_cartiere_lipsa(avarii, text_articol):
+    """Adaugă câte o avarie per cartier când AI-ul a ratat împărțirea anunțului.
+
+    Se aplică doar dacă niciuna dintre avariile extrase nu are cartier: dacă AI-ul
+    a completat măcar un cartier, a înțeles structura anunțului și nu intervenim.
+    Avariile adăugate preiau localitatea, statusul, descrierea și datele primei
+    avarii, dar cu strada goală — altfel upsert-ul le-ar deduplica greșit."""
+    if not text_articol or not avarii:
+        return avarii
+    if any((a.get("cartier") or "").strip() for a in avarii):
+        return avarii
+
+    cartiere = extrage_cartiere_din_text(text_articol)
+    if not cartiere:
+        return avarii
+
+    model = avarii[0]
+    existente = {normalizeaza_text(a.get("cartier") or "") for a in avarii}
+    rezultat = list(avarii)
+    for cartier in cartiere:
+        cheie = normalizeaza_text(cartier)
+        if not cheie or cheie in existente:
+            continue
+        copie = dict(model)
+        copie["strada"] = ""
+        copie["cartier"] = cartier
+        rezultat.append(copie)
+        existente.add(cheie)
+
+    adaugate = len(rezultat) - len(avarii)
+    if adaugate:
+        print(f"🛟 Plasă de siguranță: {adaugate} cartiere recuperate din textul anunțului "
+              f"({', '.join(cartiere)}).")
+    return rezultat
+
 
 def desparte_strazile(avarie):
     """Dacă strada conține mai multe străzi (separate prin virgulă), le despărțim în avarii separate."""
@@ -38,11 +110,12 @@ def desparte_strazile(avarie):
     return rezultat
 
 
-def salveaza_avarii(avarii_extrase, sursa_url, data_articol=None):
+def salveaza_avarii(avarii_extrase, sursa_url, data_articol=None, text_articol=""):
     """Salvează avariile extrase și anunță abonații.
 
     Întoarce (nr_salvate, nr_erori): apelantul decide dacă articolul poate fi
     marcat ca procesat sau trebuie reîncercat la rularea următoare."""
+    avarii_extrase = completeaza_cartiere_lipsa(avarii_extrase, text_articol)
     nr_salvate = 0
     nr_erori = 0
     for avarie in avarii_extrase:
@@ -282,7 +355,7 @@ def sincronizeaza_apa():
         nr_salvate, nr_erori = 0, 0
         if avarii_extrase:
             nr_salvate, nr_erori = salveaza_avarii(
-                avarii_extrase, articol["url"], articol.get("data"))
+                avarii_extrase, articol["url"], articol.get("data"), articol.get("text", ""))
         else:
             print("ℹ️ Nu s-au extras avarii din acest articol.")
 

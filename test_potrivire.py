@@ -12,6 +12,7 @@ os.environ.setdefault("SUPABASE_URL", "https://placeholder.supabase.co")
 os.environ.setdefault("SUPABASE_KEY", "placeholder")
 os.environ.setdefault("GEMINI_API_KEY", "placeholder")
 
+from aquamonitor.apa import completeaza_cartiere_lipsa, extrage_cartiere_din_text
 from aquamonitor.notificari.abonati import se_potriveste_abonamentul
 from aquamonitor.utils import normalizeaza_text
 
@@ -125,6 +126,51 @@ CAZURI = [
 ]
 
 
+ANUNT_MULTI_ZONA = (
+    "furnizarea apei potabile este sistată către consumatorii din: perimetrul delimitat de "
+    "bd. I.C. Brătianu – Oborului – I.L. Caragiale – Dezrobirii; cartierele Casa de Cultură, "
+    "Coiciu, Gară, Abator, CET și Km 4. Având în vedere diametrul magistralei."
+)
+
+
+def verifica_plasa_cartiere():
+    """Plasa de siguranță pentru anunțurile multi-zonă (bug 7 nov 2026: AI-ul a
+    reținut doar „Topolog", locul conductei, și a pierdut cele 6 cartiere)."""
+    esecuri = 0
+
+    cartiere = extrage_cartiere_din_text(ANUNT_MULTI_ZONA)
+    asteptate = ["Casa de Cultură", "Coiciu", "Gară", "Abator", "CET", "Km 4"]
+    if cartiere == asteptate:
+        print("[OK]   plasa: cartierele se citesc din textul anunțului")
+    else:
+        esecuri += 1
+        print(f"[FAIL] plasa: cartiere extrase={cartiere}")
+
+    avarii = [{"localitate": "Constanța", "strada": "Topolog", "cartier": "",
+               "status": "AVARIE", "data": "2026-11-07"}]
+    rezultat = completeaza_cartiere_lipsa(avarii, ANUNT_MULTI_ZONA)
+    if len(rezultat) == 7 and [a["cartier"] for a in rezultat[1:]] == asteptate:
+        print("[OK]   plasa: 6 avarii de cartier adăugate, strada goală pe ele")
+    else:
+        esecuri += 1
+        print(f"[FAIL] plasa: {len(rezultat)} avarii, cartiere={[a['cartier'] for a in rezultat]}")
+
+    deja = [{"localitate": "Constanța", "strada": "", "cartier": "Coiciu", "status": "AVARIE"}]
+    if completeaza_cartiere_lipsa(deja, ANUNT_MULTI_ZONA) == deja:
+        print("[OK]   plasa: nu intervine când AI-ul a completat deja un cartier")
+    else:
+        esecuri += 1
+        print("[FAIL] plasa: a modificat o extragere corectă")
+
+    if completeaza_cartiere_lipsa(avarii, "Sistare apa pe strada Tomis.") == avarii:
+        print("[OK]   plasa: anunț fără enumerare de cartiere rămâne neschimbat")
+    else:
+        esecuri += 1
+        print("[FAIL] plasa: a modificat un anunț fără cartiere")
+
+    return esecuri
+
+
 def main():
     esecuri = 0
     for caz in CAZURI:
@@ -143,8 +189,10 @@ def main():
         else:
             esecuri += 1
             print(f"[FAIL] {nume}: asteptat={asteptat}, obtinut={rezultat}")
-    print(f"\n{len(CAZURI) - esecuri}/{len(CAZURI)} cazuri trecute.")
-    sys.exit(1 if esecuri else 0)
+    esecuri_plasa = verifica_plasa_cartiere()
+    print(f"\n{len(CAZURI) - esecuri}/{len(CAZURI)} cazuri de potrivire trecute.")
+    print(f"{4 - esecuri_plasa}/4 verificări ale plasei de cartiere trecute.")
+    sys.exit(1 if (esecuri or esecuri_plasa) else 0)
 
 
 if __name__ == "__main__":
