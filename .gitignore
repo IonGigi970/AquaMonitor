@@ -13,3 +13,4 @@ cloud-init.yaml
 # infrastructură și notițe personale — nu se publică
 scripts/hetzner_watch.py
 docs/
+.vscode/
