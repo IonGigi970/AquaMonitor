@@ -8,3 +8,4 @@ __pycache__/
 .abacusai/
 .vercel
 *.code-workspace
+cloud-init.yaml

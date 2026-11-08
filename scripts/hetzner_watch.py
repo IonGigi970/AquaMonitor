@@ -8,6 +8,10 @@ Moduri:
   python scripts/hetzner_watch.py --dry-run    # doar afișează ce ar face
   python scripts/hetzner_watch.py --watch      # anunță pe Telegram când apare stoc
   python scripts/hetzner_watch.py --migrate    # creează CX23, verifică, șterge CPX22
+  python scripts/hetzner_watch.py --bootstrap  # doar cloud-init-ul, pentru orice VPS
+
+Modul --bootstrap nu atinge Hetzner: scrie cloud-init-ul într-un fișier, ca să-l
+lipești la orice provider (TinyServers, DedicatServer, Netcup, Contabo).
 
 Variabile de mediu:
   HETZNER_TOKEN        token API Hetzner Cloud (Read & Write)
@@ -206,7 +210,24 @@ def main():
                       help="creează CX23, verifică și șterge serverul vechi")
     grup.add_argument("--dry-run", action="store_true",
                       help="doar afișează ce ar face")
+    grup.add_argument("--bootstrap", action="store_true",
+                      help="scrie cloud-init-ul într-un fișier, fără Hetzner")
     args = parser.parse_args()
+
+    if args.bootstrap:
+        cale_env = os.path.join(os.getcwd(), ".env")
+        if not os.path.exists(cale_env):
+            sys.exit("❌ .env lipsește — nu am ce include în cloud-init.")
+        with open(cale_env, "rb") as fisier:
+            env_base64 = base64.b64encode(fisier.read()).decode()
+        repo_url = os.getenv("REPO_URL",
+                             "https://github.com/IonGigi970/AquaMonitor.git")
+        iesire = os.path.join(os.getcwd(), "cloud-init.yaml")
+        with open(iesire, "w", encoding="utf-8", newline="\n") as fisier:
+            fisier.write(user_data(env_base64, repo_url))
+        print(f"✅ Scris {iesire} — lipește-l la crearea VPS-ului.")
+        print("   Conține .env în base64: nu îl urca în git.")
+        return
 
     if args.dry_run:
         print(f"Tip nou: {TIP_NOU}, tip vechi: {TIP_VECHI}, locații: {LOCATII}")
